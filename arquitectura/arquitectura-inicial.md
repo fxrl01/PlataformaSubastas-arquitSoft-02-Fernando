@@ -92,3 +92,10 @@ flowchart TD
 ## Qué se mantiene igual respecto al modelo de 3 capas
 
 La dirección general del flujo (de afuera hacia adentro, y de la lógica hacia los datos) se conserva. Lo que cambia es que, dentro de la capa de negocio, la comunicación es asíncrona y con más de un consumidor por evento — una decisión que no se puede tomar recién en la etapa de implementación, porque afecta directamente cómo se van a escribir las especificaciones de cada servicio en la Etapa 3 (Spec-Driven Development).
+
+## Diagrama interactivo (Archify)
+
+Para una versión interactiva con zoom, búsqueda, trazado de relaciones y vistas guiadas, consultar:
+
+- **HTML explorable:** [rematix-arquitectura.html](rematix-arquitectura.html)
+- **Especificación JSON:** [rematix-arquitectura.architecture.json](rematix-arquitectura.architecture.json)

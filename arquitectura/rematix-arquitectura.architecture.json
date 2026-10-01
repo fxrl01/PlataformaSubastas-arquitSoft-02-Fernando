@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Rematix — Arquitectura de Subastas en Tiempo Real",
+    "quality_profile": "showcase",
+    "output": "rematix-arquitectura.html",
+    "views": [
+      {
+        "id": "flujo-puja",
+        "label": "Flujo de una puja",
+        "focus": [
+          "pujador",
+          "gateway",
+          "broker",
+          "auction-engine",
+          "redis"
+        ],
+        "note": "Desde que el pujador envía una puja hasta la validación y persistencia."
+      },
+      {
+        "id": "deteccion-fraude",
+        "label": "Detección de fraude",
+        "focus": [
+          "broker",
+          "trust-service",
+          "postgres"
+        ],
+        "note": "El trust-service evalúa la confianza del pujador en paralelo."
+      },
+      {
+        "id": "integraciones",
+        "label": "Integraciones externas",
+        "focus": [
+          "auction-engine",
+          "pasarela-pago",
+          "cdn-streaming",
+          "notificaciones"
+        ],
+        "note": "Pagos, video en vivo y notificaciones."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "pujador",
+      "type": "external",
+      "label": "Pujador",
+      "sublabel": "Navegador",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        120,
+        50
+      ]
+    },
+    {
+      "id": "rematador",
+      "type": "external",
+      "label": "Rematador",
+      "sublabel": "Organizador",
+      "pos": [
+        250,
+        40
+      ],
+      "size": [
+        130,
+        50
+      ]
+    },
+    {
+      "id": "vendedor",
+      "type": "external",
+      "label": "Vendedor",
+      "sublabel": "Consignante",
+      "pos": [
+        470,
+        40
+      ],
+      "size": [
+        120,
+        50
+      ]
+    },
+    {
+      "id": "admin",
+      "type": "external",
+      "label": "Administrador",
+      "sublabel": "Gestión",
+      "pos": [
+        680,
+        40
+      ],
+      "size": [
+        140,
+        50
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "API Gateway",
+      "sublabel": "Go · REST + WS",
+      "pos": [
+        250,
+        200
+      ],
+      "size": [
+        160,
+        56
+      ],
+      "tag": "Auth + WS"
+    },
+    {
+      "id": "broker",
+      "type": "messagebus",
+      "label": "RabbitMQ",
+      "sublabel": "Message Broker",
+      "pos": [
+        250,
+        380
+      ],
+      "size": [
+        160,
+        56
+      ],
+      "tag": "Cola por subasta"
+    },
+    {
+      "id": "trust-service",
+      "type": "security",
+      "label": "Trust Service",
+      "sublabel": "Python · IA",
+      "pos": [
+        570,
+        380
+      ],
+      "size": [
+        150,
+        56
+      ],
+      "tag": "Trust Score"
+    },
+    {
+      "id": "auction-engine",
+      "type": "backend",
+      "label": "Auction Engine",
+      "sublabel": "Go · Lógica de subasta",
+      "pos": [
+        250,
+        560
+      ],
+      "size": [
+        160,
+        56
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "Datos transaccionales",
+      "pos": [
+        100,
+        730
+      ],
+      "size": [
+        160,
+        56
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "Precio en caliente",
+      "pos": [
+        400,
+        730
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "pasarela-pago",
+      "type": "external",
+      "label": "Pasarela de Pago",
+      "sublabel": "Stripe / PayPal",
+      "pos": [
+        40,
+        890
+      ],
+      "size": [
+        160,
+        50
+      ]
+    },
+    {
+      "id": "cdn-streaming",
+      "type": "external",
+      "label": "CDN Streaming",
+      "sublabel": "Video en vivo",
+      "pos": [
+        300,
+        890
+      ],
+      "size": [
+        150,
+        50
+      ]
+    },
+    {
+      "id": "notificaciones",
+      "type": "external",
+      "label": "Notificaciones",
+      "sublabel": "Email / Push",
+      "pos": [
+        560,
+        890
+      ],
+      "size": [
+        150,
+        50
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Presentación",
+      "wraps": [
+        "gateway"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Negocio — Orientada a Eventos",
+      "wraps": [
+        "broker",
+        "auction-engine",
+        "trust-service"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Datos",
+      "wraps": [
+        "postgres",
+        "redis"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Sistemas Externos",
+      "wraps": [
+        "pasarela-pago",
+        "cdn-streaming",
+        "notificaciones"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "pujador-gw",
+      "from": "pujador",
+      "to": "gateway",
+      "label": "HTTPS/WS",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "rematador-gw",
+      "from": "rematador",
+      "to": "gateway",
+      "label": "HTTPS",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 44
+    },
+    {
+      "id": "vendedor-gw",
+      "from": "vendedor",
+      "to": "gateway",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "admin-gw",
+      "from": "admin",
+      "to": "gateway",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "gw-broker",
+      "from": "gateway",
+      "to": "broker",
+      "label": "publica puja",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 60
+    },
+    {
+      "id": "broker-engine",
+      "from": "broker",
+      "to": "auction-engine",
+      "label": "consume cola",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 60
+    },
+    {
+      "id": "broker-trust",
+      "from": "broker",
+      "to": "trust-service",
+      "label": "evalúa puja",
+      "variant": "security"
+    },
+    {
+      "id": "engine-pg",
+      "from": "auction-engine",
+      "to": "postgres",
+      "label": "SQL",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "engine-redis",
+      "from": "auction-engine",
+      "to": "redis",
+      "label": "cache precio",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "pg-pago",
+      "from": "postgres",
+      "to": "pasarela-pago",
+      "label": "cobro",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "redis-notif",
+      "from": "redis",
+      "to": "notificaciones",
+      "label": "resultado",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Actores",
+      "items": [
+        "Pujador: explora, puja y paga",
+        "Rematador: organiza evento en vivo",
+        "Vendedor: registra ítems",
+        "Administrador: gestiona fraude"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Negocio",
+      "items": [
+        "RabbitMQ: orden verificable (DA02)",
+        "Auction Engine: valida pujas (DA03)",
+        "Trust Service: filtro IA (DA06)"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Datos",
+      "items": [
+        "PostgreSQL: registro transaccional",
+        "Redis: precio actual en memoria"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Externos",
+      "items": [
+        "Pasarela de pago (Stripe/PayPal)",
+        "CDN de streaming (video)",
+        "Notificaciones (email/push)"
+      ]
+    }
+  ]
+}
