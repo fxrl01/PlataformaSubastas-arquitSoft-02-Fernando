@@ -9,7 +9,21 @@
 | DA05 | El video debe delegarse a un CDN externo. | RC09 | Obliga a separar el "canal de precio" (propio, tiempo real) del "canal de video" (de terceros), sincronizados solo a nivel de interfaz de usuario. |
 | DA06 | Las pujas deben pasar por un filtro de fraude antes de aceptarse. | AC04 — Seguridad / RF14 | Obliga a insertar el trust-service como un consumidor adicional del broker, en el camino crítico, antes de validar la puja. |
 | DA07 | El motor de subasta debe soportar múltiples formatos. | AC06 — Mantenibilidad / RF08 | Obliga a un patrón de diseño tipo *strategy* para las reglas de cada formato de subasta, en vez de lógica condicional acoplada. |
+| DA08 | El sistema debe permitir modificar funcionalidades sin afectar innecesariamente otros módulos. | AC06 — Mantenibilidad | Influye en la separación de responsabilidades, modularidad y dependencias internas. Justifica la adopción de Clean/Hexagonal Architecture como enfoque de organización interna. |
 
-## Los tres drivers que más van a condicionar el diseño
+## Resumen de drivers y decisiones que responden
 
-De los siete, **DA01, DA02 y DA06** son los que más se alejan de una arquitectura en capas convencional (como la del ejemplo del marketplace): exigen pensar el sistema como un flujo de eventos con un punto de control de fraude en el camino, no como una simple cadena Presentación → Negocio → Datos. Esto se va a reflejar directamente en la Etapa 2 (diseño arquitectónico), que probablemente necesite más de tres capas para representarse con honestidad.
+| Driver | Problema que plantea | Decisión que responde |
+|---|---|---|
+| **DA01 — Escalabilidad** | 1,000+ usuarios concurrentes por evento | Arquitectura orientada a eventos con RabbitMQ como broker central |
+| **DA02 — Integridad** | Orden de pujas debe ser verificable | Cola dedicada por subasta; broker como fuente de verdad del orden |
+| **DA03 — Rendimiento** | Confirmación y difusión casi instantánea | WebSocket para difusión; validación síncrona, persistencia asíncrona |
+| **DA04 — Pago externo** | Comunicarse con pasarela de pagos | Integración mediante interfaces y adaptadores desacoplados |
+| **DA05 — Video externo** | Distribuir video en vivo a espectadores | CDN externo; separar canal de precio del canal de video |
+| **DA06 — Seguridad** | Filtrar pujas fraudulentas | Trust Service como consumidor del broker en el camino crítico |
+| **DA07 — Formatos** | Soportar múltiples formatos de subasta | Patrón Strategy para reglas de cada formato |
+| **DA08 — Mantenibilidad** | Cambios no deben afectar otros módulos | Clean/Hexagonal Architecture + modularidad interna |
+
+## Los drivers que más condicionan el diseño
+
+De los ocho, **DA01, DA02 y DA06** son los que más se alejan de una arquitectura en capas convencional: exigen pensar el sistema como un flujo de eventos con un punto de control de fraude en el camino. **DA08** complementa exigiendo que la organización interna de cada servicio siga Clean Architecture para facilitar el mantenimiento y la evolución.

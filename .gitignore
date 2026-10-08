@@ -18,3 +18,7 @@ skills-lock.json
 
 # Archivos de validacion visual de Archify
 *.visual-check.json
+
+# Archivos de guia y plan (no se suben)
+GUIA-*.md
+Plan_implement.md
