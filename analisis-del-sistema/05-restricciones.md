@@ -1,4 +1,4 @@
-# Restricciones — Rematix
+# Restricciones — LiveBid
 
 | ID | Restricción | Descripción |
 |---|---|---|

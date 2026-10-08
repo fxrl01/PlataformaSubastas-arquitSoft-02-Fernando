@@ -1,4 +1,4 @@
-# Decisiones arquitectónicas (ADR) — Rematix
+# Decisiones arquitectónicas (ADR) — LiveBid
 
 ## ¿Qué es un ADR?
 

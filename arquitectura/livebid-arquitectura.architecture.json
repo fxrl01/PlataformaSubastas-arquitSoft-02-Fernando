@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Rematix — Arquitectura de Subastas en Tiempo Real",
+    "title": "LiveBid — Arquitectura de Subastas en Tiempo Real",
     "quality_profile": "showcase",
     "output": "rematix-arquitectura.html",
     "views": [

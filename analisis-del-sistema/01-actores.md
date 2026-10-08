@@ -1,4 +1,4 @@
-# Actores del sistema — Rematix (nombre de trabajo)
+# Actores del sistema — LiveBid (nombre de trabajo)
 
 ## Actores humanos
 

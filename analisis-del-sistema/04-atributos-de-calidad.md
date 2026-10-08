@@ -1,4 +1,4 @@
-# Atributos de calidad — Rematix
+# Atributos de calidad — LiveBid
 
 Escenario analizado: durante un evento en vivo, 1,000 o más espectadores pueden estar conectados simultáneamente, varios pujando en la misma ventana de segundos sobre el mismo lote, mientras el video se transmite sin interrupciones.
 

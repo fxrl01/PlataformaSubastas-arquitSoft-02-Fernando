@@ -1,4 +1,4 @@
-# Arquitectura inicial del sistema — Rematix
+# Arquitectura inicial del sistema — LiveBid
 
 ## De 3 capas a "capas + orientada a eventos"
 
@@ -97,5 +97,5 @@ La dirección general del flujo (de afuera hacia adentro, y de la lógica hacia 
 
 Para una versión interactiva con zoom, búsqueda, trazado de relaciones y vistas guiadas, consultar:
 
-- **HTML explorable:** [rematix-arquitectura.html](rematix-arquitectura.html)
-- **Especificación JSON:** [rematix-arquitectura.architecture.json](rematix-arquitectura.architecture.json)
+- **HTML explorable:** [livebid-arquitectura.html](livebid-arquitectura.html)
+- **Especificación JSON:** [livebid-arquitectura.architecture.json](livebid-arquitectura.architecture.json)

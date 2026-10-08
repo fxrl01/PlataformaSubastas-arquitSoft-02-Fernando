@@ -1,4 +1,4 @@
-# Estilo Arquitectónico — Rematix
+# Estilo Arquitectónico — LiveBid
 
 El estilo arquitectónico define la estructura global del sistema y cómo se organizan sus componentes a alto nivel.
 

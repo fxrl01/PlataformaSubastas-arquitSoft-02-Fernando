@@ -1,4 +1,4 @@
-# Drivers arquitectónicos — Rematix
+# Drivers arquitectónicos — LiveBid
 
 | ID | Driver arquitectónico | Origen | ¿Por qué influye en la arquitectura? |
 |---|---|---|---|

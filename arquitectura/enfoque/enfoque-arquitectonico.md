@@ -1,10 +1,10 @@
-# Enfoque Arquitectónico — Rematix
+# Enfoque Arquitectónico — LiveBid
 
 Mientras que el *Estilo Arquitectónico* describe cómo se relacionan los grandes componentes del sistema (como el Gateway, el Motor de Subastas y el Broker), el **Enfoque Arquitectónico** define cómo se organiza el código y las dependencias *dentro* de cada uno de esos componentes (servicios).
 
-Para Rematix, hemos adoptado **Clean Architecture (Arquitectura Limpia) / Arquitectura Hexagonal** como el estándar para los servicios principales (especialmente el `Auction Engine`).
+Para LiveBid, hemos adoptado **Clean Architecture (Arquitectura Limpia) / Arquitectura Hexagonal** como el estándar para los servicios principales (especialmente el `Auction Engine`).
 
-## ¿Qué es Clean Architecture en el contexto de Rematix?
+## ¿Qué es Clean Architecture en el contexto de LiveBid?
 
 Es una filosofía de diseño que coloca las reglas de negocio (el Dominio) en el centro de la aplicación, aisladas completamente de detalles técnicos como la base de datos, el framework web, el broker de mensajería o las APIs externas.
 
@@ -12,14 +12,14 @@ Es una filosofía de diseño que coloca las reglas de negocio (el Dominio) en el
 
 La regla de oro es la **Regla de Dependencia**: el código en las capas externas puede depender del código de las capas internas, pero el código de las capas internas *nunca* debe conocer nada sobre las capas externas.
 
-| Capa | Responsabilidad en Rematix | ¿Qué contiene? |
+| Capa | Responsabilidad en LiveBid | ¿Qué contiene? |
 |---|---|---|
 | **Dominio (Centro)** | Reglas puras del negocio. | Entidades (`Lote`, `Puja`, `Subasta`), Value Objects (`Monto`, `TrustScore`), Interfaces de repositorios (ej. `PujaRepository`), Lógica de validación de incrementos mínimos. |
 | **Aplicación / Casos de Uso** | Orquesta el flujo de las operaciones de negocio. | `ProcesarPujaUseCase`, `CerrarLoteUseCase`. Usa el dominio para validar y las interfaces de infraestructura para guardar. |
 | **Infraestructura (Adaptadores Secundarios)** | Implementa la persistencia y comunicación con el exterior. | `PostgresPujaRepository`, `RedisPriceCache`, `RabbitMqEventPublisher`, `StripePaymentAdapter`. |
 | **Presentación (Adaptadores Primarios)** | Puntos de entrada al servicio. | Controladores REST, Handlers de WebSocket, Consumidores de eventos (ej. `RabbitMqBidConsumer`). |
 
-## Beneficios para Rematix
+## Beneficios para LiveBid
 
 | Problema / Desafío | ¿Cómo lo resuelve Clean Architecture? |
 |---|---|

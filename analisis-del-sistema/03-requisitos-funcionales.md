@@ -1,4 +1,4 @@
-# Requisitos funcionales — Rematix
+# Requisitos funcionales — LiveBid
 
 | ID | Requisito funcional |
 |---|---|

@@ -1,4 +1,4 @@
-# Historias de usuario — Rematix
+# Historias de usuario — LiveBid
 
 Formato: **Como [actor], quiero [acción], para [beneficio].**
 
