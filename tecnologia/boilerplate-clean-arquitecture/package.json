@@ -1,0 +1,13 @@
+{
+  "name": "livebid-clean-architecture-boilerplate",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Boilerplate referencial de Clean Architecture para la plataforma de subastas LiveBid",
+  "main": "src/main.ts",
+  "scripts": {
+    "test": "node --loader ts-node/esm src/app/pruebas/subasta.pruebas.ts"
+  },
+  "keywords": ["clean-architecture", "subastas", "livebid", "typescript"],
+  "author": "Fernando Olivares Chuhui",
+  "license": "MIT"
+}
