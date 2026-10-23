@@ -1,0 +1,70 @@
+services:
+  # 1. Base de Datos Relacional ACID (Cold Path)
+  livebid-db:
+    image: postgres:16-alpine
+    container_name: livebid-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: livebid_db
+      POSTGRES_USER: livebid_admin
+      POSTGRES_PASSWORD: livebid_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U livebid_admin -d livebid_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - livebid-net
+
+  # 2. Almacén en Memoria y Pub/Sub (Hot Path)
+  livebid-cache:
+    image: redis:7-alpine
+    container_name: livebid-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - livebid-net
+
+  # 3. Servidor de API y Motor de Subastas
+  livebid-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: livebid-api-server
+    restart: always
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://livebid_admin:livebid_secure_password_2026@livebid-db:5432/livebid_db
+      REDIS_URL: redis://livebid-cache:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      livebid-db:
+        condition: service_healthy
+      livebid-cache:
+        condition: service_healthy
+    networks:
+      - livebid-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  livebid-net:
+    driver: bridge

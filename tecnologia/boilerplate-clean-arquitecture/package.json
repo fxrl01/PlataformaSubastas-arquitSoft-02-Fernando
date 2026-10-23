@@ -5,7 +5,11 @@
   "description": "Boilerplate referencial de Clean Architecture para la plataforma de subastas LiveBid",
   "main": "src/main.ts",
   "scripts": {
-    "test": "node --loader ts-node/esm src/app/pruebas/subasta.pruebas.ts"
+    "start": "node --experimental-strip-types src/main.ts",
+    "test:bids": "node --experimental-strip-types src/app/pruebas/subasta.pruebas.ts",
+    "test:escrow": "node --experimental-strip-types src/app/pruebas/garantia-ia.pruebas.ts",
+    "test:server": "NODE_ENV=test node --experimental-strip-types src/app/pruebas/servidor-integracion.pruebas.ts",
+    "test": "node --experimental-strip-types src/app/pruebas/subasta.pruebas.ts && node --experimental-strip-types src/app/pruebas/garantia-ia.pruebas.ts && NODE_ENV=test node --experimental-strip-types src/app/pruebas/servidor-integracion.pruebas.ts"
   },
   "keywords": ["clean-architecture", "subastas", "livebid", "typescript"],
   "author": "Fernando Olivares Chuhui",
