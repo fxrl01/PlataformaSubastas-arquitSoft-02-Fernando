@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiveBid — Sala de Subastas en Vivo en Tiempo Real</title>
+  <meta name="description" content="Plataforma de subastas transaccional en tiempo real con Zero Trust, Anti-Sniping y evaluación de riesgo con IA.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="dark-theme">
+
+  <!-- BARRA SUPERIOR DE ESTADO Y PERFIL -->
+  <header class="top-nav">
+    <div class="nav-left">
+      <div class="brand">
+        <span class="brand-icon">🔨</span>
+        <span class="brand-name">Live<span class="accent-text">Bid</span></span>
+      </div>
+      <div class="live-indicator">
+        <span class="pulse-dot"></span>
+        <span class="live-label">SALA EN VIVO</span>
+      </div>
+      <span class="lote-badge">Lote #SUB-2026-001</span>
+    </div>
+
+    <div class="nav-right">
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-indicator online"></span>
+        <span id="latencyPing">18 ms</span>
+      </div>
+
+      <div class="user-badge">
+        <div class="user-avatar">FO</div>
+        <div class="user-info">
+          <span class="user-name">Fernando Olivares (VIP)</span>
+          <span class="user-escrow" id="escrowBadge">🛡️ Custodia: S/. 5,000 (Activa)</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL DEL MOCKUP -->
+  <main class="auction-dashboard">
+
+    <!-- COLUMNA 1: DETALLE DEL BIEN Y PERITAJE TÉCNICO -->
+    <section class="card item-card">
+      <div class="card-header">
+        <span class="category-pill">Vehículos y Maquinaria</span>
+        <span class="verified-badge">✓ Peritaje Certificado</span>
+      </div>
+
+      <div class="item-media">
+        <div class="item-image-placeholder">
+          <div class="vehicle-icon">🚙</div>
+          <div class="media-overlay">
+            <span class="camera-icon">🎥</span> Transmisión de Martillero Activa
+          </div>
+        </div>
+      </div>
+
+      <div class="item-info">
+        <h1 class="item-title">Toyota Hilux 2022 4x4 Doble Cabina</h1>
+        <p class="item-desc">Lote de remate oficial. Documentación en regla, inspección mecánica aprobada con calificación 9.8/10. Listo para transferencia legal inmediata.</p>
+
+        <div class="specs-grid">
+          <div class="spec-box">
+            <span class="spec-label">Año</span>
+            <span class="spec-value">2022</span>
+          </div>
+          <div class="spec-box">
+            <span class="spec-label">Kilometraje</span>
+            <span class="spec-value">38,500 km</span>
+          </div>
+          <div class="spec-box">
+            <span class="spec-label">Precio Base</span>
+            <span class="spec-value highlight">S/. 45,000</span>
+          </div>
+          <div class="spec-box">
+            <span class="spec-label">Inc. Mínimo</span>
+            <span class="spec-value">S/. 1,000</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMNA 2: PISTA CENTRAL DE PUJAS (THE BIDDING ARENA) -->
+    <section class="card arena-card">
+      
+      <!-- CRONÓMETRO REGRESIVO Y MARTILLAZO -->
+      <div class="timer-section">
+        <div class="timer-header">
+          <span>Tiempo Restante para el Martillo</span>
+          <span class="phase-tag" id="auctionPhaseTag">FASE DE PUJAS EN VIVO</span>
+        </div>
+        
+        <div class="countdown-display" id="countdownDisplay">
+          <div class="time-block">
+            <span class="time-number" id="minutes">01</span>
+            <span class="time-unit">min</span>
+          </div>
+          <span class="time-separator">:</span>
+          <div class="time-block">
+            <span class="time-number" id="seconds">45</span>
+            <span class="time-unit">seg</span>
+          </div>
+        </div>
+
+        <!-- ALERTA DE ANTI-SNIPING (DINÁMICA) -->
+        <div class="anti-sniping-banner hidden" id="antiSnipingBanner">
+          <span class="alert-icon">⚡</span>
+          <div class="alert-content">
+            <strong>¡REGLA ANTI-SNIPING ACTIVADA!</strong>
+            <span>Puja en últimos segundos detectada: cronómetro extendido +30s automáticamente.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRECIO LÍDER ACTUAL -->
+      <div class="price-hero">
+        <span class="price-title">PRECIO LÍDER ACTUAL</span>
+        <div class="current-price" id="currentPriceDisplay">
+          <span class="currency">S/.</span>
+          <span class="amount" id="currentPriceValue">46,000</span>
+        </div>
+        <div class="leader-info">
+          <span>Postor Líder:</span>
+          <strong class="leader-name" id="currentLeaderName">USR-VIP-01 (Fernando O.)</strong>
+          <span class="bid-count-badge" id="totalBidsCount">1 puja</span>
+        </div>
+      </div>
+
+      <!-- CONSOLA DE EMISIÓN DE PUJAS -->
+      <div class="bid-console">
+        <label class="console-label">Incremento Rápido de Oferta</label>
+        <div class="quick-bids-row">
+          <button class="btn btn-quick" data-add="1000">+ S/. 1,000</button>
+          <button class="btn btn-quick" data-add="2000">+ S/. 2,000</button>
+          <button class="btn btn-quick" data-add="5000">+ S/. 5,000</button>
+        </div>
+
+        <div class="input-bid-group">
+          <span class="currency-prefix">S/.</span>
+          <input type="number" id="bidInput" class="bid-input" value="47000" min="47000" step="1000">
+          <button class="btn btn-action-bid" id="btnEmitirPuja">
+            <span class="btn-text">¡OFERTAR AHORA!</span>
+            <span class="btn-subtext">Confirmación Atómica &lt; 200 ms</span>
+          </button>
+        </div>
+
+        <div class="zero-trust-guarantee">
+          <span class="shield-icon">🛡️</span>
+          <span>Zero Trust: Oferta respaldada con depósito en custodia de S/. 5,000.</span>
+        </div>
+
+        <!-- MENSAJE DE FEEDBACK DE ERROR O ÉXITO -->
+        <div class="feedback-toast hidden" id="feedbackToast"></div>
+      </div>
+
+    </section>
+
+    <!-- COLUMNA 3: FEED EN TIEMPO REAL & PANEL DE INTELIGENCIA ARTIFICIAL -->
+    <section class="card sidebar-card">
+      
+      <!-- WIDGET DE EVALUACIÓN DE CONFIANZA IA -->
+      <div class="ai-widget">
+        <div class="widget-header">
+          <div class="ai-title">
+            <span class="sparkle-icon">✨</span>
+            <span>Evaluador de Confianza IA (Gemini)</span>
+          </div>
+          <span class="circuit-badge closed" id="circuitBadge">CIRCUITO: CLOSED</span>
+        </div>
+
+        <div class="ai-meter-box">
+          <div class="meter-info">
+            <span class="score-label">Score de Confianza</span>
+            <span class="score-number" id="aiScoreNumber">92<small>/100</small></span>
+          </div>
+          <div class="meter-bar">
+            <div class="meter-fill" id="aiMeterFill" style="width: 92%;"></div>
+          </div>
+          <p class="ai-justification" id="aiJustificationText">
+            ✓ Postor con KYC verificado, historial crediticio solvente y tasa de cumplimiento del 100%. Garantía estándar: 10%.
+          </p>
+        </div>
+
+        <!-- INTERRUPTOR DE RESILIENCIA (CIRCUIT BREAKER DEMO) -->
+        <div class="circuit-demo-bar">
+          <span class="demo-label">Probar Resiliencia:</span>
+          <button class="btn btn-sm btn-secondary" id="btnToggleGemini">Simular Caída de Gemini</button>
+        </div>
+      </div>
+
+      <!-- TIMELINE DE AUDITORÍA Y PUJAS EN VIVO -->
+      <div class="live-feed-section">
+        <div class="feed-header">
+          <h3>Historial Oficial de Pujas (NTP)</h3>
+          <span class="feed-badge">En Vivo</span>
+        </div>
+
+        <div class="bids-timeline" id="bidsTimeline">
+          <!-- Item 1 -->
+          <div class="bid-item winner-bid">
+            <div class="bid-correlative">#1</div>
+            <div class="bid-details">
+              <div class="bid-row-top">
+                <span class="bid-amount">S/. 46,000</span>
+                <span class="bid-time">Hace unos instantes</span>
+              </div>
+              <div class="bid-row-bottom">
+                <span class="bid-user">Fernando O. (USR-VIP-01)</span>
+                <span class="audit-tag">✓ Hash Verificado</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL DE CONTROL DEL MARTILLERO (MODERACIÓN EN VIVO) -->
+      <div class="moderator-section">
+        <div class="moderator-header">
+          <span>Martillo Virtual</span>
+          <span class="admin-badge">Operador Oficial</span>
+        </div>
+        <div class="hammer-actions">
+          <button class="btn btn-sm btn-hammer" id="btnMartillo1">¡A la una!</button>
+          <button class="btn btn-sm btn-hammer" id="btnMartillo2">¡A las dos!</button>
+          <button class="btn btn-sm btn-adjudicar" id="btnAdjudicar">¡MARTILLAZO FINAL!</button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,4 +1,19 @@
+/**
+ * =============================================================================
+ * LIVEBID — SERVIDOR DE TIEMPO REAL & PUNTO DE ENTRADA PRINCIPAL
+ * =============================================================================
+ * Clean Architecture + Event-Driven Core + Web Mockup Delivery
+ * Feature 001: Anti-Sniping & Concurrency Engine (Redis Locks)
+ * Feature 002: Zero-Trust Escrow & Gemini AI Risk Assessor (Circuit Breaker)
+ * Feature 003: Server Runtime & Docker Orchestration
+ * =============================================================================
+ */
+
 import http, { IncomingMessage, ServerResponse } from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { Subasta } from './app/dominio/modelos/subasta.modelo.ts';
 import { EstadoSubasta } from './app/dominio/modelos/estado-subasta.enum.ts';
 import { RepositorioSubastasMemoria } from './app/infraestructura/repositorio-subastas-memoria.ts';
@@ -14,6 +29,10 @@ import { RetenerGarantiaCasoUso } from './app/aplicacion/retener-garantia.caso-u
 import { LiquidarSubastaCasoUso } from './app/aplicacion/liquidar-subasta.caso-uso.ts';
 import { PujasControlador } from './app/presentacion/pujas.controlador.ts';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PUBLIC_DIR = path.join(__dirname, '../public');
+
 // =========================================================================
 // 1. BOOTSTRAPPING & INVERSIÓN DE DEPENDENCIAS (CLEAN ARCHITECTURE)
 // =========================================================================
@@ -27,7 +46,7 @@ const notificadorSala = new NotificadorSalaConsola();
 
 // Agente de IA con Circuit Breaker
 const geminiAdapter = new GeminiRiesgoAdapter();
-const circuitBreakerIA = new CircuitBreakerIA(geminiAdapter);
+export const circuitBreakerIA = new CircuitBreakerIA(geminiAdapter);
 
 // Adaptador de compatibilidad para el motor de subasta (verifica si existe garantía activa)
 const procesadorPagosAdapter = {
@@ -59,8 +78,25 @@ const subastaInicial = new Subasta(
 );
 await repoSubastas.guardar(subastaInicial);
 
+// Pre-registro de garantías en custodia (Zero-Trust) para postores de prueba
+await ucRetenerGarantia.ejecutar({
+  subastaId: 'SUB-2026-001',
+  postorId: 'USR-VIP-01',
+  precioBaseSubasta: 45000
+});
+await ucRetenerGarantia.ejecutar({
+  subastaId: 'SUB-2026-001',
+  postorId: 'USR-882',
+  precioBaseSubasta: 45000
+});
+await ucRetenerGarantia.ejecutar({
+  subastaId: 'SUB-2026-001',
+  postorId: 'USR-904',
+  precioBaseSubasta: 45000
+});
+
 // =========================================================================
-// 2. ENRUTADOR HTTP NATIVO (REST API)
+// 2. ENRUTADOR HTTP NATIVO (REST API + STATIC FILES DELIVERY)
 // =========================================================================
 
 function leerJSON(req: IncomingMessage): Promise<any> {
@@ -98,6 +134,46 @@ export const servidor = http.createServer(async (req, res) => {
   }
 
   try {
+    // -----------------------------------------------------------------------
+    // A. ENTREGA DE INTERFAZ WEB / MOCKUP ESTÁTICO (SPA DASHBOARD)
+    // -----------------------------------------------------------------------
+    if (metodo === 'GET') {
+      const rutaNormalizada = url.split('?')[0];
+      let archivoRelativo = '';
+
+      if (rutaNormalizada === '/' || rutaNormalizada === '/index.html') {
+        archivoRelativo = 'index.html';
+      } else if (rutaNormalizada === '/styles.css') {
+        archivoRelativo = 'styles.css';
+      } else if (rutaNormalizada === '/app.js') {
+        archivoRelativo = 'app.js';
+      }
+
+      if (archivoRelativo) {
+        const rutaCompleta = path.join(PUBLIC_DIR, archivoRelativo);
+        if (fs.existsSync(rutaCompleta)) {
+          const mimeTypes: Record<string, string> = {
+            '.html': 'text/html; charset=utf-8',
+            '.css': 'text/css; charset=utf-8',
+            '.js': 'application/javascript; charset=utf-8'
+          };
+          const ext = path.extname(rutaCompleta);
+          const contentType = mimeTypes[ext] || 'text/plain';
+          const contenido = fs.readFileSync(rutaCompleta);
+          res.writeHead(200, {
+            'Content-Type': contentType,
+            'Cache-Control': 'no-cache'
+          });
+          res.end(contenido);
+          return;
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // B. ENDPOINTS REST API
+    // -----------------------------------------------------------------------
+
     // 1. Health Check
     if (metodo === 'GET' && url === '/health') {
       responderJSON(res, 200, {
@@ -111,7 +187,7 @@ export const servidor = http.createServer(async (req, res) => {
       return;
     }
 
-    // 2. GET /api/v1/subastas/:id (Consulta de estado)
+    // 2. GET /api/v1/subastas/:id (Consulta de estado de la subasta)
     if (metodo === 'GET' && url.startsWith('/api/v1/subastas/')) {
       const id = url.split('/')[4];
       const subasta = await repoSubastas.obtenerPorId(id);
@@ -199,11 +275,11 @@ if (process.env.NODE_ENV !== 'test') {
 =================================================================
   🚀 LIVEBID REALTIME ENGINE INICIADO CON ÉXITO
 =================================================================
-  📡 Puerto HTTP/REST:    http://localhost:${PUERTO}
-  🩺 Health Check:        http://localhost:${PUERTO}/health
-  🏛️ Arquitectura:        Clean Architecture + Event-Driven
-  🛡️ Seguridad:           Zero Trust + Escrow + Circuit Breaker
-  📦 Lote de Prueba:      SUB-2026-001 (Toyota Hilux S/. 45,000)
+  📡 Interfaz / Mockup Web: http://localhost:${PUERTO}/
+  🩺 Health Check:          http://localhost:${PUERTO}/health
+  🏛️ Arquitectura:          Clean Architecture + Event-Driven
+  🛡️ Seguridad:             Zero Trust + Escrow + Circuit Breaker
+  📦 Lote de Prueba:        SUB-2026-001 (Toyota Hilux S/. 45,000)
 =================================================================
     `);
   });

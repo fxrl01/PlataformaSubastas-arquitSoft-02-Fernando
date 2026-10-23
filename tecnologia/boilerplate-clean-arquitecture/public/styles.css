@@ -1,0 +1,931 @@
+/* =========================================================================
+   SISTEMA DE DISEÑO LIVEBID — PALETA OSCURA DE ALTO RENDIMIENTO
+   ========================================================================= */
+
+:root {
+  --bg-main: #080c16;
+  --bg-card: rgba(16, 24, 40, 0.85);
+  --bg-card-hover: rgba(22, 33, 56, 0.95);
+  --bg-input: #0e1526;
+  
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(59, 130, 246, 0.3);
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --emerald: #10b981;
+  --emerald-glow: rgba(16, 185, 129, 0.25);
+  --cyan: #06b6d4;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  
+  --font-headings: 'Outfit', -apple-system, sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  
+  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  --shadow-glow: 0 0 35px -5px var(--emerald-glow);
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =========================================================================
+   TOP NAVIGATION BAR
+   ========================================================================= */
+
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: rgba(8, 12, 22, 0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-left, .nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-headings);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.accent-text {
+  color: var(--cyan);
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 20px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--red);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.live-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fca5a5;
+  letter-spacing: 0.5px;
+}
+
+.lote-badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+}
+
+.status-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-indicator.online {
+  background: var(--emerald);
+  box-shadow: 0 0 6px var(--emerald);
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 14px 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 30px;
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.user-escrow {
+  font-size: 0.72rem;
+  color: var(--emerald);
+  font-weight: 500;
+}
+
+/* =========================================================================
+   DASHBOARD GRID LAYOUT (3 COLUMNAS)
+   ========================================================================= */
+
+.auction-dashboard {
+  display: grid;
+  grid-template-columns: 320px 1fr 340px;
+  gap: 24px;
+  padding: 28px 32px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================================
+   COLUMNA 1: ITEM & PERITAJE
+   ========================================================================= */
+
+.item-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.category-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.verified-badge {
+  font-size: 0.75rem;
+  color: var(--emerald);
+  font-weight: 600;
+}
+
+.item-media {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-subtle);
+}
+
+.item-image-placeholder {
+  height: 220px;
+  background: linear-gradient(180deg, #162035 0%, #0d1424 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.vehicle-icon {
+  font-size: 5rem;
+  filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+}
+
+.media-overlay {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.item-title {
+  font-family: var(--font-headings);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+.item-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.spec-box {
+  background: var(--bg-input);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+}
+
+.spec-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.spec-value {
+  font-family: var(--font-headings);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.spec-value.highlight {
+  color: var(--cyan);
+}
+
+/* =========================================================================
+   COLUMNA 2: PISTA CENTRAL DE PUJAS (ARENA)
+   ========================================================================= */
+
+.arena-card {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  border: 1px solid var(--border-accent);
+}
+
+/* Cronómetro */
+.timer-section {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.timer-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.phase-tag {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.countdown-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-headings);
+  font-weight: 800;
+}
+
+.time-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.time-number {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: var(--amber);
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.time-separator {
+  font-size: 3rem;
+  color: var(--text-muted);
+  margin-top: -10px;
+}
+
+/* Alerta Anti-Sniping Dinámica */
+.anti-sniping-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: var(--radius-sm);
+  color: #fde68a;
+  font-size: 0.8rem;
+  animation: flash 1s ease-in-out;
+}
+
+.anti-sniping-banner.hidden {
+  display: none;
+}
+
+@keyframes flash {
+  0% { transform: scale(0.98); opacity: 0.5; }
+  50% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Precio Líder */
+.price-hero {
+  background: linear-gradient(135deg, rgba(19, 27, 46, 0.9) 0%, rgba(13, 20, 36, 0.95) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  text-align: center;
+  box-shadow: var(--shadow-glow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.price-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+}
+
+.current-price {
+  font-family: var(--font-headings);
+  font-size: 4.2rem;
+  font-weight: 800;
+  color: var(--emerald);
+  text-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
+  line-height: 1.1;
+  margin: 6px 0 12px 0;
+}
+
+.current-price .currency {
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: rgba(16, 185, 129, 0.8);
+  margin-right: 4px;
+}
+
+.leader-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.leader-name {
+  color: var(--text-primary);
+}
+
+.bid-count-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Consola de Puja */
+.bid-console {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.console-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quick-bids-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-quick {
+  background: var(--bg-input);
+  color: var(--cyan);
+  border: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
+.btn-quick:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--cyan);
+  transform: translateY(-2px);
+}
+
+.input-bid-group {
+  display: grid;
+  grid-template-columns: 40px 1fr 220px;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.currency-prefix {
+  font-family: var(--font-headings);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.bid-input {
+  background: transparent;
+  border: none;
+  font-family: var(--font-headings);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 14px 8px;
+  outline: none;
+}
+
+.btn-action-bid {
+  background: linear-gradient(135deg, var(--emerald) 0%, #059669 100%);
+  color: #ffffff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 16px;
+  border-radius: 0;
+}
+
+.btn-action-bid:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-action-bid:active {
+  transform: scale(0.98);
+}
+
+.btn-text {
+  font-family: var(--font-headings);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.btn-subtext {
+  font-size: 0.68rem;
+  opacity: 0.85;
+}
+
+.zero-trust-guarantee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  justify-content: center;
+}
+
+.feedback-toast {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.feedback-toast.success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--emerald);
+  color: #6ee7b7;
+}
+
+.feedback-toast.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--red);
+  color: #fca5a5;
+}
+
+.feedback-toast.hidden {
+  display: none;
+}
+
+/* =========================================================================
+   COLUMNA 3: FEED & AI PANEL
+   ========================================================================= */
+
+.sidebar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ai-widget {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ai-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--cyan);
+}
+
+.circuit-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.circuit-badge.closed {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.circuit-badge.open {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.meter-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.score-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.score-number {
+  font-family: var(--font-headings);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+.score-number small {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.meter-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.ai-justification {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.circuit-demo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.demo-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.74rem;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Timeline */
+.live-feed-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.feed-header h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.feed-badge {
+  font-size: 0.7rem;
+  color: var(--emerald);
+  font-weight: 600;
+}
+
+.bids-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bid-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-input);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border-subtle);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bid-item.winner-bid {
+  border-left-color: var(--emerald);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.bid-correlative {
+  font-family: var(--font-headings);
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.bid-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bid-row-top, .bid-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bid-amount {
+  font-family: var(--font-headings);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.bid-time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.bid-user {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.audit-tag {
+  font-size: 0.68rem;
+  color: var(--emerald);
+  font-weight: 500;
+}
+
+/* Moderación Martillero */
+.moderator-section {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.moderator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--amber);
+  margin-bottom: 8px;
+}
+
+.admin-badge {
+  font-size: 0.65rem;
+  background: rgba(245, 158, 11, 0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.hammer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 6px;
+}
+
+.btn-hammer {
+  background: var(--bg-input);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.btn-hammer:hover {
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.btn-adjudicar {
+  background: linear-gradient(135deg, #b45309, #d97706);
+  color: #fff;
+  font-weight: 700;
+}
+
+.btn-adjudicar:hover {
+  filter: brightness(1.2);
+}
+
+/* =========================================================================
+   RESPONSIVE DESIGN (TABLET & MOBILE)
+   ========================================================================= */
+
+@media (max-width: 1200px) {
+  .auction-dashboard {
+    grid-template-columns: 1fr 1fr;
+  }
+  .item-card {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 800px) {
+  .auction-dashboard {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .item-card {
+    grid-column: span 1;
+  }
+  .input-bid-group {
+    grid-template-columns: 35px 1fr;
+  }
+  .btn-action-bid {
+    grid-column: span 2;
+    height: 48px;
+  }
+}
