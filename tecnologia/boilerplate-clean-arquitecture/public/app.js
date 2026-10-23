@@ -1,29 +1,30 @@
 /**
  * =============================================================================
- * LIVEBID — CLIENT INTERFACE & REAL-TIME INTERACTION CONTROLLER
- * Arquitectura: Event-Driven UI con Mockup Dinámico y Conexión REST
+ * AUREUM & CO. — PRIVATE AUCTION SALON CONTROLLER
+ * Controlador Reactivo de Alta Fidelidad & Integración Clean Architecture REST
  * =============================================================================
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // ---------------------------------------------------------------------------
-  // 1. ESTADO DE LA SALA DE SUBASTAS
+  // 1. ESTADO DE LA SALA PRIVADA
   // ---------------------------------------------------------------------------
   const state = {
     subastaId: 'SUB-2026-001',
-    precioActual: 46000,
+    precioActual: 45000,
     incrementoMinimo: 1000,
-    postorLiderId: 'USR-VIP-01',
-    postorLiderNombre: 'Fernando O. (USR-VIP-01)',
+    postorLiderId: 'NINGUNO',
+    postorLiderNombre: 'Esperando Primera Oferta en Estrado',
     usuarioActual: {
       id: 'USR-VIP-01',
-      nombre: 'Fernando Olivares (VIP)',
+      nombre: 'Fernando Olivares',
+      tier: 'CLIENT PRIVÉ (BLACK TIER)',
       garantia: 5000,
       escrowId: 'ESC-2026-901'
     },
     tiempoSegundos: 105, // 1 min 45 seg
     activa: true,
-    totalPujas: 1,
+    totalPujas: 0,
     geminiOnline: true,
     timerInterval: null
   };
@@ -58,11 +59,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const elBtnMartillo2 = document.getElementById('btnMartillo2');
   const elBtnAdjudicar = document.getElementById('btnAdjudicar');
 
-  // Insertar selector rápido de postores para probar reglas de auto-puja
+  // Insertar selector elegante de postores
   inyectarSelectorPostor();
 
+  // Sincronizar estado inicial con el backend si está disponible
+  await sincronizarEstadoInicial();
+
   // ---------------------------------------------------------------------------
-  // 3. CRONÓMETRO REGRESIVO Y LÓGICA ANTI-SNIPING
+  // 3. SINCRONIZACIÓN INICIAL CON EL BACKEND CLEAN ARCHITECTURE
+  // ---------------------------------------------------------------------------
+  async function sincronizarEstadoInicial() {
+    try {
+      const res = await fetch(`/api/v1/subastas/${state.subastaId}`);
+      if (res.ok) {
+        const data = await res.json();
+        state.precioActual = data.precioActual;
+        state.incrementoMinimo = data.incrementoMinimo;
+        state.postorLiderId = data.postorLiderId;
+        state.totalPujas = data.totalPujas || 0;
+        if (data.postorLiderId && data.postorLiderId !== 'NINGUNO') {
+          state.postorLiderNombre = `${data.postorLiderId} (Líder en Estrado)`;
+        }
+        actualizarPreciosUI();
+      }
+    } catch {
+      // Si corre offline, mantiene valores de catálogo
+      actualizarPreciosUI();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. CRONÓMETRO REGRESIVO Y LÓGICA SOBERANA ANTI-SNIPING
   // ---------------------------------------------------------------------------
   function actualizarCronometro() {
     if (!state.activa) return;
@@ -80,10 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elMinutes.textContent = String(m).padStart(2, '0');
     elSeconds.textContent = String(s).padStart(2, '0');
 
-    // Alerta visual de últimos 15 segundos
+    // Alerta de últimos 15 segundos con aura dorada/fuego
     if (state.tiempoSegundos <= 15) {
-      elCountdownDisplay.style.borderColor = 'rgba(239, 68, 68, 0.8)';
-      elCountdownDisplay.style.boxShadow = '0 0 25px rgba(239, 68, 68, 0.4)';
+      elCountdownDisplay.style.borderColor = 'rgba(245, 158, 11, 0.9)';
+      elCountdownDisplay.style.boxShadow = '0 0 35px rgba(245, 158, 11, 0.45)';
     } else {
       elCountdownDisplay.style.borderColor = '';
       elCountdownDisplay.style.boxShadow = '';
@@ -96,15 +123,15 @@ document.addEventListener('DOMContentLoaded', () => {
       elAntiSnipingBanner.classList.remove('hidden');
 
       // Animación de pulso
-      elCountdownDisplay.classList.add('extended-pulse');
-      setTimeout(() => elCountdownDisplay.classList.remove('extended-pulse'), 1000);
+      elCountdownDisplay.classList.add('price-bump');
+      setTimeout(() => elCountdownDisplay.classList.remove('price-bump'), 600);
 
       // Ocultar banner tras 5 segundos
       setTimeout(() => {
         elAntiSnipingBanner.classList.add('hidden');
       }, 5000);
 
-      mostrarToast('⚡ ANTI-SNIPING: Puja de último segundo detectada (+30 segundos añadidos)', 'success');
+      mostrarToast('⚡ ANTI-SNIPING SOBERANO: Oferta en borde crítico (+30s otorgados a sala)', 'success');
     }
   }
 
@@ -113,32 +140,33 @@ document.addEventListener('DOMContentLoaded', () => {
     clearInterval(state.timerInterval);
     elMinutes.textContent = '00';
     elSeconds.textContent = '00';
-    elAuctionPhaseTag.textContent = 'SUBASTA CERRADA - ADJUDICADA';
-    elAuctionPhaseTag.style.background = 'rgba(239, 68, 68, 0.2)';
-    elAuctionPhaseTag.style.color = '#ef4444';
+    elAuctionPhaseTag.textContent = 'ESTRADO CERRADO • LOTE ADJUDICADO';
+    elAuctionPhaseTag.style.background = 'rgba(212, 175, 55, 0.2)';
+    elAuctionPhaseTag.style.color = '#fde68a';
+    elAuctionPhaseTag.style.borderColor = 'rgba(212, 175, 55, 0.6)';
 
     elBtnEmitirPuja.disabled = true;
     elBidInput.disabled = true;
     quickBidButtons.forEach(btn => btn.disabled = true);
 
-    mostrarToast(`🏆 TIEMPO CONCLUIDO: Adjudicación oficial para ${state.postorLiderNombre} por S/. ${formatearNumero(state.precioActual)}`, 'success');
+    mostrarToast(`🏛️ MARTILLAZO DE SALA: Adjudicación oficial concedida a ${state.postorLiderNombre} por S/. ${formatearNumero(state.precioActual)}`, 'success');
   }
 
   state.timerInterval = setInterval(actualizarCronometro, 1000);
 
   // ---------------------------------------------------------------------------
-  // 4. GESTIÓN DE PUJAS EN VIVO (EVENT-DRIVEN)
+  // 5. GESTIÓN DE OFERTAS PRIVADAS EN VIVO (EVENT-DRIVEN)
   // ---------------------------------------------------------------------------
   function actualizarPreciosUI() {
     elCurrentPriceValue.textContent = formatearNumero(state.precioActual);
     elCurrentLeaderName.textContent = state.postorLiderNombre;
-    elTotalBidsCount.textContent = `${state.totalPujas} puja${state.totalPujas > 1 ? 's' : ''}`;
+    elTotalBidsCount.textContent = `${state.totalPujas} oferta${state.totalPujas === 1 ? '' : 's'}`;
 
     const siguienteMinimo = state.precioActual + state.incrementoMinimo;
     elBidInput.min = siguienteMinimo;
     elBidInput.value = siguienteMinimo;
 
-    // Efecto visual de rebote de precio
+    // Efecto visual de rebote noble de precio
     elCurrentPriceDisplay.classList.add('price-bump');
     setTimeout(() => elCurrentPriceDisplay.classList.remove('price-bump'), 400);
   }
@@ -156,19 +184,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Validación 1: Monto superior al mínimo
     if (monto < state.precioActual + state.incrementoMinimo) {
-      mostrarToast(`⚠️ El monto debe ser al menos S/. ${formatearNumero(state.precioActual + state.incrementoMinimo)}`, 'error');
+      mostrarToast(`⚠️ La oferta en estrado debe ser al menos S/. ${formatearNumero(state.precioActual + state.incrementoMinimo)}`, 'error');
       return;
     }
 
     // Validación 2: Regla de Dominio: Evitar auto-puja líder
     if (state.usuarioActual.id === state.postorLiderId) {
-      mostrarToast(`❌ REGLA DE DOMINIO (ERR_AUTO_PUJA_LIDER): Ya eres el postor líder con S/. ${formatearNumero(state.precioActual)}. No puedes sobrepujar tu propia oferta.`, 'error');
+      mostrarToast(`❌ REGLA DE SALA (ERR_AUTO_PUJA_LIDER): Ya ostentas la oferta máxima con S/. ${formatearNumero(state.precioActual)}. No es admisible sobrepujar tu propio estatus.`, 'error');
       return;
     }
 
     // Deshabilitar temporalmente para simular latencia atómica
     elBtnEmitirPuja.disabled = true;
-    elBtnEmitirPuja.innerHTML = '<span class="btn-text">VALIDANDO EN REDIS...</span>';
+    elBtnEmitirPuja.innerHTML = '<span class="btn-text">AUDITANDO EN REDIS...</span>';
 
     try {
       // Intentar llamada HTTP al servidor backend si está disponible
@@ -186,22 +214,21 @@ document.addEventListener('DOMContentLoaded', () => {
         procesarPujaExitosa(monto, state.usuarioActual.nombre, data.hashSha256 || generarHashMock());
       } else {
         const errorData = await res.json().catch(() => ({}));
-        // Si el backend responde con error de dominio, mostrarlo
         if (errorData.error) {
           mostrarToast(`❌ ${errorData.error}`, 'error');
         } else {
-          // Fallback a simulación cliente
           procesarPujaExitosa(monto, state.usuarioActual.nombre, generarHashMock());
         }
       }
-    } catch (netErr) {
+    } catch {
       // Fallback offline autónomo
       procesarPujaExitosa(monto, state.usuarioActual.nombre, generarHashMock());
     } finally {
       elBtnEmitirPuja.disabled = false;
       elBtnEmitirPuja.innerHTML = `
-        <span class="btn-text">¡OFERTAR AHORA!</span>
-        <span class="btn-subtext">Confirmación Atómica &lt; 200 ms</span>
+        <span class="btn-shine"></span>
+        <span class="btn-text">¡EMITIR OFERTA PRIVADA!</span>
+        <span class="btn-subtext">Confirmación Atómica Concurrente &lt; 200 ms</span>
       `;
     }
   });
@@ -216,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dispararReglaAntiSniping();
     agregarPujaAlTimeline(monto, postorNombre, hash);
 
-    mostrarToast(`✓ ¡Oferta de S/. ${formatearNumero(monto)} aceptada! Bloqueo atómico confirmado en 142 ms.`, 'success');
+    mostrarToast(`✓ Oferta Soberana de S/. ${formatearNumero(monto)} certificada. Bloqueo atómico confirmado en 138 ms.`, 'success');
   }
 
   function agregarPujaAlTimeline(monto, postor, hash) {
@@ -231,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="bid-row-bottom">
           <span class="bid-user">${postor}</span>
-          <span class="audit-tag" title="Hash: ${hash}">✓ Hash SHA-256</span>
+          <span class="audit-tag" title="Hash: ${hash}">✓ Protocolo Notarial SHA-256</span>
         </div>
       </div>
     `;
@@ -244,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. WIDGET DE INTELIGENCIA ARTIFICIAL & CIRCUIT BREAKER
+  // 6. WIDGET DE INTELIGENCIA ARTIFICIAL & CIRCUIT BREAKER
   // ---------------------------------------------------------------------------
   elBtnToggleGemini.addEventListener('click', () => {
     state.geminiOnline = !state.geminiOnline;
@@ -254,77 +281,77 @@ document.addEventListener('DOMContentLoaded', () => {
       elCircuitBadge.className = 'circuit-badge open';
       elCircuitBadge.textContent = 'CIRCUITO: OPEN (FALLBACK ACTIVO)';
 
-      elAiScoreNumber.innerHTML = '75<small>/100</small>';
+      elAiScoreNumber.innerHTML = '75<small>/100 (B+ Contingencia)</small>';
       elAiMeterFill.style.width = '75%';
       elAiMeterFill.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
 
       elAiJustificationText.innerHTML = `
-        <strong style="color: #f59e0b;">⚠️ Timeout en Gemini AI (>800ms):</strong> Circuit Breaker activado.
-        El sistema recurrió a la <em>Heurística Local</em> sin interrumpir la subasta.
-        Garantía preventiva ajustada al <strong>20%</strong> (S/. 9,000).
+        <strong style="color: #f59e0b;">⚠️ Auditoría de Resiliencia (Timeout >800ms):</strong> Circuit Breaker activado en 12 ms.
+        El motor recurrió a la <em>Heurística Local</em> protegiendo la subasta sin interrupción.
+        Garantía preventiva soberana reajustada al <strong>20% (S/. 9,000)</strong>.
       `;
 
-      elBtnToggleGemini.textContent = '🟢 Restaurar Servicio Gemini';
+      elBtnToggleGemini.innerHTML = '<span class="btn-icon">🟢</span> Restaurar Servicio Gemini';
       elBtnToggleGemini.classList.add('btn-success-sim');
 
-      mostrarToast('⚡ Circuit Breaker abrió el circuito: Conmutado a Heurística Local en 12 ms.', 'error');
+      mostrarToast('⚡ Circuit Breaker conmutó a Heurística Local. Transacciones garantizadas.', 'error');
     } else {
       // ESTADO CLOSED (NORMALIZADO)
       elCircuitBadge.className = 'circuit-badge closed';
       elCircuitBadge.textContent = 'CIRCUITO: CLOSED';
 
-      elAiScoreNumber.innerHTML = '92<small>/100</small>';
+      elAiScoreNumber.innerHTML = '92<small>/100 (AAA+)</small>';
       elAiMeterFill.style.width = '92%';
       elAiMeterFill.style.background = 'linear-gradient(90deg, #10b981, #06b6d4)';
 
       elAiJustificationText.innerHTML = `
-        ✓ Postor con KYC verificado, historial crediticio solvente y tasa de cumplimiento del 100%. Garantía estándar: 10% (S/. 4,500).
+        ✓ Postor con KYC acreditado, calificación crediticia solvente y 100% de cumplimiento en sala. Garantía preferencial asignada: <strong>10% (S/. 4,500)</strong>.
       `;
 
-      elBtnToggleGemini.textContent = 'Simular Caída de Gemini';
+      elBtnToggleGemini.innerHTML = '<span class="btn-icon">⚡</span> Simular Caída de Gemini';
       elBtnToggleGemini.classList.remove('btn-success-sim');
 
-      mostrarToast('✓ Servicio Gemini 1.5 Flash restaurado. Circuito normalizado a CLOSED.', 'success');
+      mostrarToast('✓ Enlace Gemini 1.5 Flash restablecido. Circuito normalizado a CLOSED.', 'success');
     }
   });
 
   // ---------------------------------------------------------------------------
-  // 6. ACCIONES DEL MARTILLERO OFICIAL (MODERACIÓN EN VIVO)
+  // 7. ACCIONES DEL MARTILLERO OFICIAL (GAVEL ACTIONS)
   // ---------------------------------------------------------------------------
   elBtnMartillo1.addEventListener('click', () => {
     if (state.tiempoSegundos > 20) state.tiempoSegundos = 20;
-    agregarMensajeMartillero(`🔨 Martillero Oficial: "¡A la una por S/. ${formatearNumero(state.precioActual)} para ${state.postorLiderNombre}!"`);
-    mostrarToast('🔨 ¡A LA UNA!', 'success');
+    agregarMensajeMartillero(`⚖️ Martillero de Sala: "¡PRIMERA LLAMADA por S/. ${formatearNumero(state.precioActual)} para ${state.postorLiderNombre}!"`);
+    mostrarToast('⚖️ ¡A LA UNA (PRIMERA LLAMADA)!', 'success');
   });
 
   elBtnMartillo2.addEventListener('click', () => {
     if (state.tiempoSegundos > 10) state.tiempoSegundos = 10;
-    agregarMensajeMartillero(`🔨 Martillero Oficial: "¡A las dos por S/. ${formatearNumero(state.precioActual)}! ¿Alguna otra oferta en sala?"`);
-    mostrarToast('🔨 ¡A LAS DOS!', 'success');
+    agregarMensajeMartillero(`⚖️ Martillero de Sala: "¡SEGUNDA LLAMADA por S/. ${formatearNumero(state.precioActual)}! ¿Alguna última oferta en sala o estrados privados?"`);
+    mostrarToast('⚖️ ¡A LAS DOS (SEGUNDA LLAMADA)!', 'success');
   });
 
   elBtnAdjudicar.addEventListener('click', () => {
     finalizarSubastaPorTiempo();
-    agregarMensajeMartillero(`🎉 ¡MARTILLAZO FINAL! Lote SUB-2026-001 adjudicado formalmente a ${state.postorLiderNombre} por S/. ${formatearNumero(state.precioActual)}.`);
+    agregarMensajeMartillero(`🏛️ ¡ADJUDICACIÓN DEFINITIVA! Lote SUB-2026-001 adjudicado formalmente bajo fe notarial a ${state.postorLiderNombre} por S/. ${formatearNumero(state.precioActual)}.`);
     
-    // Disparar celebración visual
-    lanzarConfetti();
+    // Disparar lluvia de oro y platino
+    lanzarConfettiDorado();
   });
 
   function agregarMensajeMartillero(mensaje) {
     const item = document.createElement('div');
     item.className = 'bid-item auctioneer-msg';
-    item.style.borderLeft = '3px solid #f59e0b';
-    item.style.background = 'rgba(245, 158, 11, 0.08)';
+    item.style.borderLeft = '3px solid var(--gold-primary)';
+    item.style.background = 'rgba(212, 175, 55, 0.08)';
     item.innerHTML = `
-      <div class="bid-correlative" style="background:#f59e0b; color:#000;">🔨</div>
+      <div class="bid-correlative" style="background: var(--gold-primary); color: #000; font-weight: 900;">⚖️</div>
       <div class="bid-details">
         <div class="bid-row-top">
-          <span class="bid-amount" style="font-size: 0.95rem; color:#f59e0b;">Anuncio de Sala</span>
-          <span class="bid-time">En vivo</span>
+          <span class="bid-amount" style="font-size: 0.88rem; color: var(--gold-champagne);">Bando Notarial de Sala</span>
+          <span class="bid-time">En Vivo</span>
         </div>
         <div class="bid-row-bottom">
-          <span class="bid-user" style="color: #fde68a;">${mensaje}</span>
+          <span class="bid-user" style="color: #fef08a; font-family: var(--font-serif); font-size: 0.8rem;">${mensaje}</span>
         </div>
       </div>
     `;
@@ -332,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // 7. SELECTOR DE POSTOR PARA DEMOSTRACIONES
+  // 8. SELECTOR DE POSTOR PRIVADO PARA DEMOSTRACIONES
   // ---------------------------------------------------------------------------
   function inyectarSelectorPostor() {
     const cardArena = document.querySelector('.bid-console');
@@ -345,28 +372,30 @@ document.addEventListener('DOMContentLoaded', () => {
       align-items: center;
       justify-content: space-between;
       margin-bottom: 12px;
-      padding: 8px 12px;
-      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 14px;
+      background: rgba(212, 175, 55, 0.04);
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      font-size: 0.8rem;
+      border: 1px solid var(--gold-soft-border);
+      font-size: 0.78rem;
     `;
 
     selectorDiv.innerHTML = `
-      <span style="color: var(--text-secondary);">👤 Simular Usuario:</span>
+      <span style="font-family: var(--font-serif); color: var(--gold-champagne); font-weight: 700; letter-spacing: 0.06em;">👤 Credencial de Postor:</span>
       <select id="userSelector" style="
-        background: #0e1526;
+        background: #0a0d14;
         color: #f8fafc;
-        border: 1px solid rgba(59, 130, 246, 0.3);
+        border: 1px solid var(--gold-soft-border);
         border-radius: 6px;
-        padding: 4px 8px;
-        font-size: 0.8rem;
+        padding: 5px 10px;
+        font-family: var(--font-serif);
+        font-size: 0.78rem;
+        font-weight: 700;
         cursor: pointer;
         outline: none;
       ">
-        <option value="USR-VIP-01" selected>Fernando Olivares (VIP Líder)</option>
-        <option value="USR-882">Carlos Rodríguez (Postor 2)</option>
-        <option value="USR-904">Ana María Paredes (Postor 3)</option>
+        <option value="USR-VIP-01" selected>Fernando Olivares • Client Privé (Black Tier)</option>
+        <option value="USR-882">Lord Carlos Rodríguez • Sovereign Member</option>
+        <option value="USR-904">Doña Ana María Paredes • Private Trustee</option>
       </select>
     `;
 
@@ -376,16 +405,16 @@ document.addEventListener('DOMContentLoaded', () => {
     selectEl.addEventListener('change', (e) => {
       const val = e.target.value;
       if (val === 'USR-VIP-01') {
-        state.usuarioActual = { id: 'USR-VIP-01', nombre: 'Fernando Olivares (VIP)', garantia: 5000 };
+        state.usuarioActual = { id: 'USR-VIP-01', nombre: 'Fernando Olivares', garantia: 5000, tier: 'CLIENT PRIVÉ (BLACK TIER)' };
       } else if (val === 'USR-882') {
-        state.usuarioActual = { id: 'USR-882', nombre: 'Carlos Rodríguez', garantia: 6000 };
+        state.usuarioActual = { id: 'USR-882', nombre: 'Lord Carlos Rodríguez', garantia: 6000, tier: 'SOVEREIGN MEMBER' };
       } else {
-        state.usuarioActual = { id: 'USR-904', nombre: 'Ana María Paredes', garantia: 5500 };
+        state.usuarioActual = { id: 'USR-904', nombre: 'Doña Ana María Paredes', garantia: 5500, tier: 'PRIVATE TRUSTEE' };
       }
 
       const escrowBadge = document.getElementById('escrowBadge');
       if (escrowBadge) {
-        escrowBadge.textContent = `🛡️ Custodia: S/. ${formatearNumero(state.usuarioActual.garantia)} (Activa)`;
+        escrowBadge.textContent = `🛡️ Custodia Soberana: S/. ${formatearNumero(state.usuarioActual.garantia)} (Activa)`;
       }
 
       const userNameEl = document.querySelector('.user-name');
@@ -393,19 +422,24 @@ document.addEventListener('DOMContentLoaded', () => {
         userNameEl.textContent = state.usuarioActual.nombre;
       }
 
-      mostrarToast(`Cambiado a perfil: ${state.usuarioActual.nombre}`, 'success');
+      const tierPill = document.querySelector('.tier-pill');
+      if (tierPill) {
+        tierPill.textContent = state.usuarioActual.tier;
+      }
+
+      mostrarToast(`Credencial activa: ${state.usuarioActual.nombre} (${state.usuarioActual.tier})`, 'success');
     });
   }
 
   // ---------------------------------------------------------------------------
-  // 8. UTILIDADES
+  // 9. UTILIDADES & LLUVIA DE CONFETI METÁLICO (GOLD & PLATINUM)
   // ---------------------------------------------------------------------------
   function formatearNumero(num) {
     return Number(num).toLocaleString('es-PE');
   }
 
   function generarHashMock() {
-    return Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('') + '...sha256';
+    return '0x' + Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('') + '...sha256';
   }
 
   function mostrarToast(mensaje, tipo = 'success') {
@@ -419,32 +453,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4500);
   }
 
-  function lanzarConfetti() {
-    const colores = ['#10b981', '#06b6d4', '#f59e0b', '#ec4899', '#3b82f6'];
-    for (let i = 0; i < 40; i++) {
+  function lanzarConfettiDorado() {
+    const colores = ['#d4af37', '#f7e7b4', '#fff3cc', '#c5a059', '#e2e8f0', '#997822'];
+    for (let i = 0; i < 60; i++) {
       const p = document.createElement('div');
-      p.className = 'confetti-particle';
+      p.className = 'luxury-confetti';
       p.style.cssText = `
         position: fixed;
-        top: -10px;
+        top: -15px;
         left: ${Math.random() * 100}vw;
-        width: ${Math.random() * 8 + 6}px;
-        height: ${Math.random() * 14 + 8}px;
+        width: ${Math.random() * 10 + 6}px;
+        height: ${Math.random() * 16 + 8}px;
         background: ${colores[Math.floor(Math.random() * colores.length)]};
+        box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
         transform: rotate(${Math.random() * 360}deg);
         z-index: 9999;
         pointer-events: none;
-        transition: transform 3s ease-out, top 3s ease-in, opacity 3s ease-out;
+        transition: transform 3.5s ease-out, top 3.5s ease-in, opacity 3.5s ease-out;
       `;
       document.body.appendChild(p);
 
       requestAnimationFrame(() => {
         p.style.top = '105vh';
-        p.style.transform = `rotate(${Math.random() * 720}deg) translateX(${Math.random() * 100 - 50}px)`;
+        p.style.transform = `rotate(${Math.random() * 1080}deg) translateX(${Math.random() * 140 - 70}px)`;
         p.style.opacity = '0';
       });
 
-      setTimeout(() => p.remove(), 3200);
+      setTimeout(() => p.remove(), 3600);
     }
   }
 });

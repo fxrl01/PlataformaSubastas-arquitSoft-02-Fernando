@@ -137,7 +137,7 @@ export const servidor = http.createServer(async (req, res) => {
     // -----------------------------------------------------------------------
     // A. ENTREGA DE INTERFAZ WEB / MOCKUP ESTÁTICO (SPA DASHBOARD)
     // -----------------------------------------------------------------------
-    if (metodo === 'GET') {
+    if (metodo === 'GET' || metodo === 'HEAD') {
       const rutaNormalizada = url.split('?')[0];
       let archivoRelativo = '';
 

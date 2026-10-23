@@ -1,177 +1,293 @@
-/* =========================================================================
-   SISTEMA DE DISEÑO LIVEBID — PALETA OSCURA DE ALTO RENDIMIENTO
-   ========================================================================= */
+/* =============================================================================
+   AUREUM & CO. — PRIVATE AUCTION SALON DESIGN SYSTEM
+   Estética: Clásica, Exclusiva, Millonaria, Cinematográfica y Haute Horlogerie
+   Inspiración: Christie's Live, Sotheby's Digital Salon, RM Sotheby's, Watches of Switzerland
+   ============================================================================= */
 
 :root {
-  --bg-main: #080c16;
-  --bg-card: rgba(16, 24, 40, 0.85);
-  --bg-card-hover: rgba(22, 33, 56, 0.95);
-  --bg-input: #0e1526;
-  
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-accent: rgba(59, 130, 246, 0.3);
-  
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
-  --emerald: #10b981;
+  /* Paleta Base: Caviar Noir y Obsidiana Ahumada */
+  --bg-deep-void: #050608;
+  --bg-salon: #090b10;
+  --bg-card: rgba(14, 17, 24, 0.88);
+  --bg-card-hover: rgba(20, 25, 36, 0.95);
+  --bg-surface: #10141d;
+  --bg-input: #0a0d14;
+
+  /* Metales Nobles: Oro Champagne, Oro Imperial y Platino */
+  --gold-primary: #d4af37;
+  --gold-champagne: #f7e7b4;
+  --gold-burnished: #c5a059;
+  --gold-deep: #8c6d23;
+  --gold-glow: rgba(212, 175, 55, 0.25);
+  --gold-soft-border: rgba(212, 175, 55, 0.22);
+  --gold-hover-border: rgba(212, 175, 55, 0.6);
+
+  --platinum: #e2e8f0;
+  --platinum-muted: #94a3b8;
+
+  /* Estados de Sala & Transacción */
+  --emerald-sovereign: #10b981;
   --emerald-glow: rgba(16, 185, 129, 0.25);
-  --cyan: #06b6d4;
-  --blue: #3b82f6;
-  --amber: #f59e0b;
-  --red: #ef4444;
-  
-  --font-headings: 'Outfit', -apple-system, sans-serif;
-  --font-body: 'Inter', -apple-system, sans-serif;
-  
-  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.05);
-  --shadow-glow: 0 0 35px -5px var(--emerald-glow);
-  --radius-lg: 16px;
-  --radius-md: 10px;
-  --radius-sm: 6px;
+  --amber-urgent: #f59e0b;
+  --crimson-hazard: #ef4444;
+
+  /* Textos y Tipografía Editorial */
+  --text-primary: #f8fafc;
+  --text-secondary: #c5c8d2;
+  --text-gold: #e6ca65;
+  --text-muted: #798192;
+
+  --font-serif: 'Cinzel', 'Cormorant Garamond', Georgia, serif;
+  --font-editorial: 'Cormorant Garamond', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Sombras y Luces Escénicas */
+  --shadow-salon: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--gold-soft-border);
+  --shadow-gold-hover: 0 20px 40px -8px rgba(0, 0, 0, 0.9), 0 0 30px var(--gold-glow), 0 0 0 1px var(--gold-hover-border);
+  --gold-gradient: linear-gradient(135deg, #fff3cc 0%, #d4af37 50%, #997822 100%);
+  --gold-gradient-btn: linear-gradient(135deg, #e6c86e 0%, #d4af37 40%, #b89128 100%);
+
+  --radius-frame: 14px;
+  --radius-sub: 8px;
 }
 
+/* Reset y Base Global */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-body {
-  background-color: var(--bg-main);
-  background-image: 
-    radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+body.luxury-salon-theme {
+  background-color: var(--bg-deep-void);
   color: var(--text-primary);
-  font-family: var(--font-body);
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  line-height: 1.55;
   min-height: 100vh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  position: relative;
 }
 
-/* =========================================================================
-   TOP NAVIGATION BAR
-   ========================================================================= */
+/* Fondo Cinematográfico: Luz Cenital Teatral y Bruma Dorada */
+.cinematic-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.light-beam {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90vw;
+  height: 70vh;
+  background: radial-gradient(ellipse at 50% 0%, rgba(212, 175, 55, 0.09) 0%, rgba(16, 20, 30, 0.05) 50%, transparent 80%);
+}
+
+.gold-dust-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(1px 1px at 20px 30px, rgba(212, 175, 55, 0.3), rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 140px 170px, rgba(247, 231, 180, 0.25), rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 280px 90px, rgba(212, 175, 55, 0.2), rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 450px 320px, rgba(247, 231, 180, 0.2), rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 500px 500px;
+  opacity: 0.7;
+}
+
+/* =============================================================================
+   BARRA SUPERIOR DE ALTA GAMA (HAUTE TOP NAVIGATION)
+   ============================================================================= */
 
 .top-nav {
+  position: relative;
+  z-index: 10;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 32px;
-  background: rgba(8, 12, 22, 0.85);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-subtle);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  padding: 18px 40px;
+  background: rgba(9, 11, 16, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--gold-soft-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
 }
 
 .nav-left, .nav-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 22px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-headings);
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  gap: 14px;
 }
 
-.accent-text {
-  color: var(--cyan);
+.brand-emblem {
+  font-size: 1.8rem;
+  filter: drop-shadow(0 0 10px var(--gold-glow));
+}
+
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.brand-gold {
+  color: var(--gold-primary);
+  font-style: italic;
+}
+
+.brand-sub {
+  font-family: var(--font-serif);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--gold-burnished);
+  text-transform: uppercase;
+}
+
+.luxury-divider {
+  width: 1px;
+  height: 34px;
+  background: linear-gradient(180deg, transparent, var(--gold-soft-border), transparent);
 }
 
 .live-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 20px;
 }
 
 .pulse-dot {
   width: 8px;
   height: 8px;
-  background: var(--red);
+  background-color: var(--emerald-sovereign);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--red);
-  animation: pulse 1.5s infinite;
+  box-shadow: 0 0 10px var(--emerald-sovereign);
+  animation: pulseLive 2s infinite ease-in-out;
 }
 
-@keyframes pulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.8; }
+@keyframes pulseLive {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
 }
 
 .live-label {
-  font-size: 0.75rem;
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
   font-weight: 700;
-  color: #fca5a5;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em;
+  color: #a7f3d0;
 }
 
 .lote-badge {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--gold-champagne);
+  padding: 6px 14px;
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: 20px;
 }
 
+/* Panel de Conexión & Perfil VIP */
 .connection-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border-subtle);
-}
-
-.status-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .status-indicator.online {
-  background: var(--emerald);
-  box-shadow: 0 0 6px var(--emerald);
+  width: 7px;
+  height: 7px;
+  background: var(--gold-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--gold-primary);
+}
+
+.status-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.connection-status strong {
+  font-family: var(--font-sans);
+  color: var(--gold-champagne);
+  font-weight: 600;
 }
 
 .user-badge {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 14px 4px 6px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--gold-soft-border);
   border-radius: 30px;
+  transition: all 0.3s ease;
+}
+
+.user-badge:hover {
+  background: rgba(212, 175, 55, 0.06);
+  border-color: var(--gold-burnished);
 }
 
 .user-avatar {
-  width: 34px;
-  height: 34px;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #1b202c, #0d1017);
+  border: 1px solid var(--gold-primary);
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--blue), var(--cyan));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-family: var(--font-serif);
+  font-weight: 800;
   font-size: 0.85rem;
+  color: var(--gold-champagne);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
+}
+
+.vip-crown {
+  position: absolute;
+  top: -8px;
+  right: -5px;
+  font-size: 0.8rem;
+  filter: drop-shadow(0 0 4px var(--gold-primary));
 }
 
 .user-info {
@@ -179,79 +295,163 @@ body {
   flex-direction: column;
 }
 
+.user-header-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .user-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.tier-pill {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--gold-champagne);
+  border-radius: 10px;
 }
 
 .user-escrow {
   font-size: 0.72rem;
-  color: var(--emerald);
+  color: #86efac;
   font-weight: 500;
 }
 
-/* =========================================================================
-   DASHBOARD GRID LAYOUT (3 COLUMNAS)
-   ========================================================================= */
+/* =============================================================================
+   LAYOUT PRINCIPAL DEL SALÓN PRIVADO (3 COLUMNAS)
+   ============================================================================= */
 
 .auction-dashboard {
+  position: relative;
+  z-index: 5;
   display: grid;
-  grid-template-columns: 320px 1fr 340px;
-  gap: 24px;
-  padding: 28px 32px;
-  max-width: 1600px;
+  grid-template-columns: 370px 1fr 410px;
+  gap: 28px;
+  padding: 34px 40px;
+  max-width: 1720px;
   margin: 0 auto;
 }
 
-.card {
+/* Marco de Lujo con Cantoneras de Oro (Sotheby's Frame) */
+.card.luxury-frame {
+  position: relative;
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  padding: 24px;
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-frame);
+  padding: 26px;
+  box-shadow: var(--shadow-salon);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.card.luxury-frame:hover {
+  box-shadow: var(--shadow-gold-hover);
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
+.frame-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+.frame-corner.top-left {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--gold-primary);
+  border-left: 2px solid var(--gold-primary);
+  border-top-left-radius: var(--radius-frame);
+}
+
+.frame-corner.top-right {
+  top: -1px;
+  right: -1px;
+  border-top: 2px solid var(--gold-primary);
+  border-right: 2px solid var(--gold-primary);
+  border-top-right-radius: var(--radius-frame);
+}
+
+.frame-corner.bottom-left {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 2px solid var(--gold-primary);
+  border-left: 2px solid var(--gold-primary);
+  border-bottom-left-radius: var(--radius-frame);
+}
+
+.frame-corner.bottom-right {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--gold-primary);
+  border-right: 2px solid var(--gold-primary);
+  border-bottom-right-radius: var(--radius-frame);
+}
+
+/* =============================================================================
+   COLUMNA 1: DETALLE Y CURADURÍA DEL LOTE
+   ============================================================================= */
+
+.item-card {
   display: flex;
   flex-direction: column;
 }
 
-/* =========================================================================
-   COLUMNA 1: ITEM & PERITAJE
-   ========================================================================= */
-
-.item-card .card-header {
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .category-pill {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--cyan);
-  background: rgba(6, 182, 212, 0.1);
+  font-family: var(--font-serif);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--gold-champagne);
   padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(6, 182, 212, 0.2);
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: 4px;
 }
 
 .verified-badge {
-  font-size: 0.75rem;
-  color: var(--emerald);
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6ee7b7;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
 }
 
-.item-media {
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  margin-bottom: 20px;
-  border: 1px solid var(--border-subtle);
-}
-
-.item-image-placeholder {
+/* Escenario Fotográfico / Cinematográfico */
+.item-showcase-box {
+  width: 100%;
   height: 220px;
-  background: linear-gradient(180deg, #162035 0%, #0d1424 100%);
+  background: radial-gradient(circle at 50% 40%, rgba(26, 32, 48, 0.9) 0%, rgba(9, 11, 16, 0.98) 100%);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 22px;
+}
+
+.asset-visual-wrap {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -259,93 +459,164 @@ body {
   position: relative;
 }
 
-.vehicle-icon {
-  font-size: 5rem;
-  filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+.luxury-asset-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-family: var(--font-serif);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--gold-primary);
+  color: var(--gold-champagne);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.asset-icon-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  height: 110px;
+}
+
+.car-silhouette {
+  font-size: 4rem;
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8));
+  z-index: 2;
+  transition: transform 0.4s ease;
+}
+
+.item-showcase-box:hover .car-silhouette {
+  transform: scale(1.06);
+}
+
+.stage-glow {
+  position: absolute;
+  width: 140px;
+  height: 60px;
+  bottom: 10px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(212, 175, 55, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  z-index: 1;
 }
 
 .media-overlay {
   position: absolute;
-  bottom: 10px;
-  left: 10px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(6px);
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, transparent, rgba(5, 7, 10, 0.95));
+  font-family: var(--font-serif);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--gold-champagne);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.lot-number-tag {
+  font-family: var(--font-serif);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--gold-burnished);
+  margin-bottom: 6px;
 }
 
 .item-title {
-  font-family: var(--font-headings);
+  font-family: var(--font-serif);
   font-size: 1.35rem;
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
   line-height: 1.3;
+  margin-bottom: 12px;
 }
 
 .item-desc {
-  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
   color: var(--text-secondary);
-  margin-bottom: 20px;
+  line-height: 1.6;
+  margin-bottom: 24px;
 }
 
+/* Grilla de Especificaciones con Oro */
 .specs-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
 .spec-box {
-  background: var(--bg-input);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sub);
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
+  transition: all 0.25s ease;
+}
+
+.spec-box:hover {
+  background: rgba(212, 175, 55, 0.04);
+  border-color: var(--gold-soft-border);
 }
 
 .spec-label {
-  font-size: 0.72rem;
+  font-family: var(--font-serif);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  margin-bottom: 4px;
 }
 
 .spec-value {
-  font-family: var(--font-headings);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
   font-weight: 600;
-  font-size: 1rem;
+  color: var(--platinum);
 }
 
 .spec-value.highlight {
-  color: var(--cyan);
+  font-family: var(--font-serif);
+  color: var(--gold-champagne);
+  font-weight: 800;
 }
 
-/* =========================================================================
-   COLUMNA 2: PISTA CENTRAL DE PUJAS (ARENA)
-   ========================================================================= */
+.spec-value.highlight-gold {
+  color: #6ee7b7;
+  font-weight: 700;
+}
+
+/* =============================================================================
+   COLUMNA 2: LA ARENA CENTRAL DE PUJAS (THE GRAND BIDDING ARENA)
+   ============================================================================= */
 
 .arena-card {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  position: relative;
-  border: 1px solid var(--border-accent);
+  gap: 22px;
 }
 
-/* Cronómetro */
+/* Sección de Cronómetro Monumental */
 .timer-section {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
   padding: 18px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
 }
 
 .timer-header {
@@ -353,27 +624,50 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
+}
+
+.timer-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timer-icon {
+  font-size: 1rem;
+}
+
+.timer-title {
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold-burnished);
 }
 
 .phase-tag {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--emerald);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.72rem;
+  font-family: var(--font-serif);
+  font-size: 0.65rem;
   font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--emerald-sovereign);
+  padding: 3px 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
 }
 
 .countdown-display {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-family: var(--font-headings);
-  font-weight: 800;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 30px;
+  background: rgba(10, 13, 20, 0.85);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+  transition: all 0.3s ease;
 }
 
 .time-block {
@@ -383,378 +677,566 @@ body {
 }
 
 .time-number {
-  font-size: 3.5rem;
+  font-family: var(--font-serif);
+  font-size: 2.8rem;
+  font-weight: 900;
   line-height: 1;
-  color: var(--amber);
-  text-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
-  font-variant-numeric: tabular-nums;
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(212, 175, 55, 0.4));
 }
 
 .time-unit {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
+  font-family: var(--font-serif);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--gold-burnished);
+  margin-top: 4px;
 }
 
 .time-separator {
-  font-size: 3rem;
-  color: var(--text-muted);
-  margin-top: -10px;
+  font-family: var(--font-serif);
+  font-size: 2.2rem;
+  font-weight: 300;
+  color: var(--gold-primary);
+  margin-bottom: 12px;
+  opacity: 0.6;
 }
 
-/* Alerta Anti-Sniping Dinámica */
+/* Banner de Alerta Anti-Sniping con Oro y Fuego */
 .anti-sniping-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-top: 14px;
   width: 100%;
-  padding: 10px 16px;
-  background: linear-gradient(90deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%);
+  padding: 12px 18px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.15) 0%, rgba(212, 175, 55, 0.15) 100%);
   border: 1px solid rgba(245, 158, 11, 0.5);
-  border-radius: var(--radius-sm);
-  color: #fde68a;
-  font-size: 0.8rem;
-  animation: flash 1s ease-in-out;
+  border-radius: var(--radius-sub);
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.25);
+  animation: flashSniping 1.5s infinite alternate ease-in-out;
 }
 
 .anti-sniping-banner.hidden {
   display: none;
 }
 
-@keyframes flash {
-  0% { transform: scale(0.98); opacity: 0.5; }
-  50% { transform: scale(1.02); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes flashSniping {
+  0% { transform: scale(0.99); opacity: 0.85; }
+  100% { transform: scale(1.01); opacity: 1; }
 }
 
-/* Precio Líder */
+.alert-icon {
+  font-size: 1.4rem;
+}
+
+.alert-content {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.alert-content strong {
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: #fde68a;
+}
+
+.alert-content span {
+  color: #fef3c7;
+}
+
+/* Hero del Precio Líder Monumental */
 .price-hero {
-  background: linear-gradient(135deg, rgba(19, 27, 46, 0.9) 0%, rgba(13, 20, 36, 0.95) 100%);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  box-shadow: var(--shadow-glow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 26px 20px;
+  background: radial-gradient(circle at 50% 50%, rgba(28, 35, 50, 0.4) 0%, rgba(10, 13, 20, 0.9) 100%);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
+  box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.2), 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.price-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 80%;
+  margin-bottom: 8px;
+}
+
+.ornament-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-burnished), transparent);
 }
 
 .price-title {
-  font-size: 0.78rem;
+  font-family: var(--font-serif);
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--text-secondary);
+  letter-spacing: 0.22em;
+  color: var(--gold-champagne);
+  text-transform: uppercase;
 }
 
 .current-price {
-  font-family: var(--font-headings);
-  font-size: 4.2rem;
-  font-weight: 800;
-  color: var(--emerald);
-  text-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
-  line-height: 1.1;
-  margin: 6px 0 12px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 12px;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.current-price.price-bump {
+  transform: scale(1.08);
 }
 
 .current-price .currency {
+  font-family: var(--font-serif);
   font-size: 2.2rem;
-  font-weight: 600;
-  color: rgba(16, 185, 129, 0.8);
-  margin-right: 4px;
+  font-weight: 700;
+  color: var(--gold-primary);
+  opacity: 0.85;
+}
+
+.current-price .amount {
+  font-family: var(--font-serif);
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 0%, #fff1ba 30%, #d4af37 70%, #aa7c11 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 15px rgba(212, 175, 55, 0.45));
 }
 
 .leader-info {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  gap: 10px;
+  font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+.leader-caption {
+  font-family: var(--font-serif);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .leader-name {
-  color: var(--text-primary);
+  font-family: var(--font-serif);
+  color: #fff;
+  font-weight: 700;
 }
 
 .bid-count-badge {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  padding: 2px 8px;
+  font-family: var(--font-serif);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid var(--gold-soft-border);
+  color: var(--gold-champagne);
   border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
 }
 
-/* Consola de Puja */
+/* Consola de Emisión de Ofertas */
 .bid-console {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .console-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold-burnished);
+  text-transform: uppercase;
 }
 
 .quick-bids-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
-.btn {
-  font-family: var(--font-body);
-  font-weight: 600;
-  border: none;
-  border-radius: var(--radius-md);
+.btn-quick {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
+  color: var(--gold-champagne);
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 10px 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
+  transition: all 0.25s ease;
+  display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.btn-quick {
-  background: var(--bg-input);
-  color: var(--cyan);
-  border: 1px solid var(--border-subtle);
-  padding: 10px 14px;
-  font-size: 0.9rem;
+  gap: 4px;
 }
 
 .btn-quick:hover {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: var(--cyan);
+  background: rgba(212, 175, 55, 0.12);
+  border-color: var(--gold-primary);
   transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(212, 175, 55, 0.2);
 }
 
+.gold-plus {
+  color: var(--gold-primary);
+}
+
+/* Input y Botón Maestro de Remate */
 .input-bid-group {
   display: grid;
-  grid-template-columns: 40px 1fr 220px;
-  align-items: center;
+  grid-template-columns: auto 1fr 1.8fr;
+  align-items: stretch;
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
   overflow: hidden;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.3s ease;
+}
+
+.input-bid-group:focus-within {
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 25px var(--gold-glow), inset 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
 .currency-prefix {
-  font-family: var(--font-headings);
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text-secondary);
-  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--gold-primary);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .bid-input {
   background: transparent;
   border: none;
-  font-family: var(--font-headings);
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  padding: 14px 8px;
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  font-weight: 800;
+  padding: 14px 16px;
+  width: 100%;
   outline: none;
 }
 
 .btn-action-bid {
-  background: linear-gradient(135deg, var(--emerald) 0%, #059669 100%);
-  color: #ffffff;
-  height: 100%;
+  position: relative;
+  background: var(--gold-gradient-btn);
+  border: none;
+  color: #0b0d13;
+  padding: 12px 20px;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  padding: 10px 16px;
-  border-radius: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  font-weight: 800;
 }
 
 .btn-action-bid:hover {
-  filter: brightness(1.15);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  filter: brightness(1.12);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
 }
 
 .btn-action-bid:active {
   transform: scale(0.98);
 }
 
-.btn-text {
-  font-family: var(--font-headings);
-  font-size: 1.1rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+.btn-action-bid .btn-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-20deg);
+  animation: shineLoop 3.5s infinite;
 }
 
-.btn-subtext {
-  font-size: 0.68rem;
-  opacity: 0.85;
+@keyframes shineLoop {
+  0% { left: -100%; }
+  30% { left: 200%; }
+  100% { left: 200%; }
+}
+
+.btn-action-bid .btn-text {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #10141d;
+  position: relative;
+  z-index: 2;
+}
+
+.btn-action-bid .btn-subtext {
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(16, 20, 29, 0.85);
+  margin-top: 2px;
+  position: relative;
+  z-index: 2;
 }
 
 .zero-trust-guarantee {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sub);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
+.zero-trust-guarantee strong {
+  color: var(--gold-champagne);
+}
+
+.shield-icon {
+  font-size: 1.1rem;
+}
+
+/* Feedback Toast */
 .feedback-toast {
-  padding: 10px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 500;
+  padding: 12px 18px;
+  border-radius: var(--radius-sub);
+  font-size: 0.84rem;
+  font-weight: 600;
   text-align: center;
+  transition: all 0.3s ease;
 }
 
 .feedback-toast.success {
   background: rgba(16, 185, 129, 0.15);
-  border: 1px solid var(--emerald);
-  color: #6ee7b7;
+  border: 1px solid var(--emerald-sovereign);
+  color: #a7f3d0;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
 }
 
 .feedback-toast.error {
   background: rgba(239, 68, 68, 0.15);
-  border: 1px solid var(--red);
+  border: 1px solid var(--crimson-hazard);
   color: #fca5a5;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
 }
 
 .feedback-toast.hidden {
   display: none;
 }
 
-/* =========================================================================
-   COLUMNA 3: FEED & AI PANEL
-   ========================================================================= */
+/* =============================================================================
+   COLUMNA 3: INTELIGENCIA INSTITUCIONAL & ESTRADO DEL MARTILLERO
+   ============================================================================= */
 
 .sidebar-card {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
+/* Widget de Confianza IA (Swiss Private Banking Style) */
 .ai-widget {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: var(--radius-sub);
+  padding: 18px;
 }
 
 .widget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .ai-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--cyan);
+  gap: 10px;
+}
+
+.sparkle-icon {
+  font-size: 1.2rem;
+  filter: drop-shadow(0 0 8px var(--gold-primary));
+}
+
+.ai-title-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-main {
+  font-family: var(--font-serif);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #fff;
+}
+
+.ai-sub {
+  font-family: var(--font-serif);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--gold-burnished);
 }
 
 .circuit-badge {
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-family: var(--font-serif);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 20px;
 }
 
 .circuit-badge.closed {
   background: rgba(16, 185, 129, 0.15);
-  color: var(--emerald);
+  color: #6ee7b7;
   border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .circuit-badge.open {
   background: rgba(245, 158, 11, 0.2);
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}
+
+.ai-meter-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sub);
+  padding: 14px;
+  margin-bottom: 12px;
 }
 
 .meter-info {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 6px;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 .score-label {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .score-number {
-  font-family: var(--font-headings);
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: var(--cyan);
-}
-
-.score-number small {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--gold-champagne);
 }
 
 .meter-bar {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
   overflow: hidden;
   margin-bottom: 10px;
 }
 
 .meter-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--blue), var(--cyan));
-  border-radius: 4px;
-  transition: width 0.4s ease;
+  background: linear-gradient(90deg, #10b981, #06b6d4);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  transition: width 0.6s ease, background 0.6s ease;
 }
 
 .ai-justification {
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .circuit-demo-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .demo-label {
-  font-size: 0.72rem;
+  font-family: var(--font-serif);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 0.74rem;
-}
-
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--gold-soft-border);
+  color: var(--gold-champagne);
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  border-radius: var(--radius-sub);
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(212, 175, 55, 0.15);
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.25);
 }
 
-/* Timeline */
+.btn-secondary.btn-success-sim {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--emerald-sovereign);
+  color: #a7f3d0;
+}
+
+/* Timeline Notarial de Ofertas */
 .live-feed-section {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
 .feed-header {
@@ -762,62 +1244,91 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.feed-header h3 {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-secondary);
+.feed-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feed-title-box h3 {
+  font-family: var(--font-serif);
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
 }
 
 .feed-badge {
-  font-size: 0.7rem;
-  color: var(--emerald);
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold-champagne);
+  padding: 2px 8px;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid var(--gold-soft-border);
+  border-radius: 10px;
 }
 
 .bids-timeline {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 280px;
+  max-height: 250px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 6px;
+}
+
+/* Custom Scrollbar */
+.bids-timeline::-webkit-scrollbar {
+  width: 4px;
+}
+.bids-timeline::-webkit-scrollbar-thumb {
+  background: var(--gold-burnished);
+  border-radius: 4px;
 }
 
 .bid-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--bg-input);
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border-left: 3px solid var(--border-subtle);
-  animation: slideIn 0.3s ease;
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sub);
+  padding: 10px 14px;
+  transition: all 0.3s ease;
 }
 
 .bid-item.winner-bid {
-  border-left-color: var(--emerald);
-  background: rgba(16, 185, 129, 0.08);
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-color: var(--gold-primary);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15);
 }
 
 .bid-correlative {
-  font-family: var(--font-headings);
+  font-family: var(--font-serif);
+  font-size: 0.78rem;
   font-weight: 800;
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid var(--gold-soft-border);
+  color: var(--gold-champagne);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .bid-details {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .bid-row-top, .bid-row-bottom {
@@ -827,105 +1338,141 @@ body {
 }
 
 .bid-amount {
-  font-family: var(--font-headings);
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--gold-champagne);
 }
 
 .bid-time {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
 }
 
 .bid-user {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #fff;
 }
 
 .audit-tag {
-  font-size: 0.68rem;
-  color: var(--emerald);
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #6ee7b7;
+  letter-spacing: 0.05em;
 }
 
-/* Moderación Martillero */
+/* Estrado del Martillero (Gavel Console) */
 .moderator-section {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-radius: var(--radius-md);
-  padding: 12px;
+  background: rgba(20, 14, 10, 0.7);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: var(--radius-sub);
+  padding: 16px;
+  box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.2);
 }
 
 .moderator-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--amber);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.moderator-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--gold-champagne);
 }
 
 .admin-badge {
-  font-size: 0.65rem;
-  background: rgba(245, 158, 11, 0.2);
-  padding: 1px 6px;
+  font-family: var(--font-serif);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid var(--gold-primary);
+  color: var(--gold-champagne);
   border-radius: 4px;
 }
 
 .hammer-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.3fr;
-  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .btn-hammer {
-  background: var(--bg-input);
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--gold-soft-border);
+  color: var(--gold-champagne);
+  font-family: var(--font-serif);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 10px 6px;
+  border-radius: var(--radius-sub);
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
 .btn-hammer:hover {
-  background: rgba(245, 158, 11, 0.2);
+  background: rgba(212, 175, 55, 0.15);
+  border-color: var(--gold-primary);
+  transform: translateY(-2px);
 }
 
 .btn-adjudicar {
-  background: linear-gradient(135deg, #b45309, #d97706);
-  color: #fff;
-  font-weight: 700;
+  grid-column: span 2;
+  background: linear-gradient(135deg, #b8860b 0%, #d4af37 50%, #996515 100%);
+  border: 1px solid var(--gold-champagne);
+  color: #0b0e14;
+  font-family: var(--font-serif);
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  padding: 12px 16px;
+  border-radius: var(--radius-sub);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-adjudicar:hover {
-  filter: brightness(1.2);
+  filter: brightness(1.15);
+  box-shadow: 0 0 25px rgba(212, 175, 55, 0.6);
+  transform: translateY(-2px);
 }
 
-/* =========================================================================
-   RESPONSIVE DESIGN (TABLET & MOBILE)
-   ========================================================================= */
+/* =============================================================================
+   RESPONSIVIDAD Y AJUSTES FINOS
+   ============================================================================= */
 
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
   .auction-dashboard {
-    grid-template-columns: 1fr 1fr;
-  }
-  .item-card {
-    grid-column: span 2;
+    grid-template-columns: 320px 1fr 360px;
+    padding: 24px 20px;
+    gap: 20px;
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1100px) {
   .auction-dashboard {
     grid-template-columns: 1fr;
-    padding: 16px;
   }
-  .item-card {
-    grid-column: span 1;
-  }
-  .input-bid-group {
-    grid-template-columns: 35px 1fr;
-  }
-  .btn-action-bid {
-    grid-column: span 2;
-    height: 48px;
+  .top-nav {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 20px;
   }
 }

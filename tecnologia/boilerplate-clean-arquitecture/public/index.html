@@ -3,232 +3,326 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LiveBid — Sala de Subastas en Vivo en Tiempo Real</title>
-  <meta name="description" content="Plataforma de subastas transaccional en tiempo real con Zero Trust, Anti-Sniping y evaluación de riesgo con IA.">
+  <title>AUREUM & CO. — Private Auction Salon | Sala de Subastas Exclusiva</title>
+  <meta name="description" content="Aureum & Co. — Salón Privado de Subastas de Alta Gama en Tiempo Real. Arquitectura Zero-Trust, Anti-Sniping y Custodia Soberana con IA.">
+  
+  <!-- TIPOGRAFÍAS DE LUJO: Cinzel (Romana Clásica Imperial), Playfair Display (Editorial), Cormorant Garamond & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="dark-theme">
+<body class="luxury-salon-theme">
 
-  <!-- BARRA SUPERIOR DE ESTADO Y PERFIL -->
+  <!-- FONDO CINEMATOGRÁFICO CON LUZ CENITAL Y AURA DORADA -->
+  <div class="cinematic-backdrop">
+    <div class="light-beam"></div>
+    <div class="gold-dust-particles"></div>
+  </div>
+
+  <!-- BARRA SUPERIOR DE ALTO NIVEL: CASA DE REMATE INTERNACIONAL -->
   <header class="top-nav">
     <div class="nav-left">
       <div class="brand">
-        <span class="brand-icon">🔨</span>
-        <span class="brand-name">Live<span class="accent-text">Bid</span></span>
+        <div class="brand-emblem">⚜️</div>
+        <div class="brand-titles">
+          <span class="brand-name">AUREUM <span class="brand-gold">&</span> CO.</span>
+          <span class="brand-sub">PRIVATE AUCTION SALON • GENÈVE • LONDRES • LIMA</span>
+        </div>
       </div>
+      <div class="luxury-divider"></div>
       <div class="live-indicator">
         <span class="pulse-dot"></span>
-        <span class="live-label">SALA EN VIVO</span>
+        <span class="live-label">SALA PRIVADA EN VIVO</span>
       </div>
-      <span class="lote-badge">Lote #SUB-2026-001</span>
+      <span class="lote-badge">CATÁLOGO OFICIAL • LOTE 01</span>
     </div>
 
     <div class="nav-right">
-      <div class="connection-status" id="connectionStatus">
+      <div class="connection-status" id="connectionStatus" title="Sincronización Atómica de Tiempo Real">
         <span class="status-indicator online"></span>
-        <span id="latencyPing">18 ms</span>
+        <span class="status-label">LATENCIA ATÓMICA:</span>
+        <strong id="latencyPing">16 ms</strong>
       </div>
 
-      <div class="user-badge">
-        <div class="user-avatar">FO</div>
+      <div class="luxury-divider"></div>
+
+      <div class="user-badge" title="Membresía Soberana Verificada">
+        <div class="user-avatar">
+          <span>FO</span>
+          <div class="vip-crown">👑</div>
+        </div>
         <div class="user-info">
-          <span class="user-name">Fernando Olivares (VIP)</span>
-          <span class="user-escrow" id="escrowBadge">🛡️ Custodia: S/. 5,000 (Activa)</span>
+          <div class="user-header-line">
+            <span class="user-name">Fernando Olivares</span>
+            <span class="tier-pill">CLIENT PRIVÉ (BLACK TIER)</span>
+          </div>
+          <span class="user-escrow" id="escrowBadge">🛡️ Custodia Soberana: S/. 5,000 (Activa)</span>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- CONTENEDOR PRINCIPAL DEL MOCKUP -->
+  <!-- CONTENEDOR PRINCIPAL DEL SALÓN PRIVADO -->
   <main class="auction-dashboard">
 
-    <!-- COLUMNA 1: DETALLE DEL BIEN Y PERITAJE TÉCNICO -->
-    <section class="card item-card">
+    <!-- ===================================================================
+         COLUMNA 1: FICHA TÉCNICA Y CURADURÍA DEL LOTE
+         =================================================================== -->
+    <section class="card item-card luxury-frame">
+      <div class="frame-corner top-left"></div>
+      <div class="frame-corner top-right"></div>
+      <div class="frame-corner bottom-left"></div>
+      <div class="frame-corner bottom-right"></div>
+
       <div class="card-header">
-        <span class="category-pill">Vehículos y Maquinaria</span>
-        <span class="verified-badge">✓ Peritaje Certificado</span>
+        <span class="category-pill">HAUTE HORLOGERIE & SPECIAL LOTS</span>
+        <span class="verified-badge">★ PROCEDENCIA & PERITAJE NOTARIAL 9.9/10</span>
       </div>
 
+      <!-- ESCENARIO VISUAL CINEMATOGRÁFICO DEL LOTE -->
       <div class="item-media">
-        <div class="item-image-placeholder">
-          <div class="vehicle-icon">🚙</div>
-          <div class="media-overlay">
-            <span class="camera-icon">🎥</span> Transmisión de Martillero Activa
+        <div class="item-showcase-box">
+          <div class="asset-visual-wrap">
+            <div class="luxury-asset-badge">LOTE MAESTRO</div>
+            <!-- VEHÍCULO DE EDICIÓN EXCLUSIVA DE REMATE -->
+            <div class="asset-icon-stage">
+              <div class="car-silhouette">🚙</div>
+              <div class="stage-glow"></div>
+            </div>
+            <div class="media-overlay">
+              <span class="camera-icon">🎥</span> TRANSMISIÓN EN DIRECTO DESDE EL ESTRADO DEL MARTILLERO
+            </div>
           </div>
         </div>
       </div>
 
       <div class="item-info">
-        <h1 class="item-title">Toyota Hilux 2022 4x4 Doble Cabina</h1>
-        <p class="item-desc">Lote de remate oficial. Documentación en regla, inspección mecánica aprobada con calificación 9.8/10. Listo para transferencia legal inmediata.</p>
+        <div class="lot-number-tag">SOTHEBY'S LOT #SUB-2026-001</div>
+        <h1 class="item-title">Toyota Hilux GR-Sport 2022 4x4 • Heritage Edition</h1>
+        <p class="item-desc">
+          Ejemplar corporativo exclusivo en condición de exhibición con blindaje ligero Nivel III-A certificado. Incluye historial vehicular inmaculado, inspección mecánica certificada con calificación 9.9/10, duplicado de llaves presenciales y custodia de títulos lista para protocolización notarial inmediata.
+        </p>
 
+        <!-- ESPECIFICACIONES DE CURADURÍA -->
         <div class="specs-grid">
           <div class="spec-box">
-            <span class="spec-label">Año</span>
-            <span class="spec-value">2022</span>
+            <span class="spec-label">AÑO / EDICIÓN</span>
+            <span class="spec-value">2022 • GR Limited</span>
           </div>
           <div class="spec-box">
-            <span class="spec-label">Kilometraje</span>
+            <span class="spec-label">KILOMETRAJE</span>
             <span class="spec-value">38,500 km</span>
           </div>
           <div class="spec-box">
-            <span class="spec-label">Precio Base</span>
+            <span class="spec-label">VALUACIÓN BASE</span>
             <span class="spec-value highlight">S/. 45,000</span>
           </div>
           <div class="spec-box">
-            <span class="spec-label">Inc. Mínimo</span>
+            <span class="spec-label">INCREMENTO MÍNIMO</span>
             <span class="spec-value">S/. 1,000</span>
+          </div>
+          <div class="spec-box">
+            <span class="spec-label">PERITAJE JUDICIAL</span>
+            <span class="spec-value highlight-gold">Certificado A-1</span>
+          </div>
+          <div class="spec-box">
+            <span class="spec-label">NOTARIO DE SALA</span>
+            <span class="spec-value">Dra. E. De La Quintana</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- COLUMNA 2: PISTA CENTRAL DE PUJAS (THE BIDDING ARENA) -->
-    <section class="card arena-card">
+    <!-- ===================================================================
+         COLUMNA 2: LA ARENA CENTRAL DE PUJAS (THE GRAND BIDDING ARENA)
+         =================================================================== -->
+    <section class="card arena-card luxury-frame">
+      <div class="frame-corner top-left"></div>
+      <div class="frame-corner top-right"></div>
+      <div class="frame-corner bottom-left"></div>
+      <div class="frame-corner bottom-right"></div>
       
-      <!-- CRONÓMETRO REGRESIVO Y MARTILLAZO -->
+      <!-- CRONÓMETRO REGRESIVO Y MARTILLAZO SOBERANO -->
       <div class="timer-section">
         <div class="timer-header">
-          <span>Tiempo Restante para el Martillo</span>
-          <span class="phase-tag" id="auctionPhaseTag">FASE DE PUJAS EN VIVO</span>
+          <div class="timer-title-box">
+            <span class="timer-icon">⏳</span>
+            <span class="timer-title">TIEMPO PARA EL MARTILLAZO DE SALA</span>
+          </div>
+          <span class="phase-tag" id="auctionPhaseTag">ESTRADO ABIERTO • PUJAS EN VIVO</span>
         </div>
         
         <div class="countdown-display" id="countdownDisplay">
           <div class="time-block">
             <span class="time-number" id="minutes">01</span>
-            <span class="time-unit">min</span>
+            <span class="time-unit">MINUTOS</span>
           </div>
           <span class="time-separator">:</span>
           <div class="time-block">
             <span class="time-number" id="seconds">45</span>
-            <span class="time-unit">seg</span>
+            <span class="time-unit">SEGUNDOS</span>
           </div>
         </div>
 
-        <!-- ALERTA DE ANTI-SNIPING (DINÁMICA) -->
+        <!-- ALERTA DE ANTI-SNIPING (DINÁMICA CON ESTILO ORO) -->
         <div class="anti-sniping-banner hidden" id="antiSnipingBanner">
           <span class="alert-icon">⚡</span>
           <div class="alert-content">
-            <strong>¡REGLA ANTI-SNIPING ACTIVADA!</strong>
-            <span>Puja en últimos segundos detectada: cronómetro extendido +30s automáticamente.</span>
+            <strong>¡REGLA SOBERANA ANTI-SNIPING ACTIVADA!</strong>
+            <span>Oferta en últimos segundos detectada: Se ha añadido <strong>+30 segundos</strong> de extensión automática para garantizar una puja justa.</span>
           </div>
         </div>
       </div>
 
-      <!-- PRECIO LÍDER ACTUAL -->
+      <!-- PRECIO LÍDER ACTUAL MONUMENTAL -->
       <div class="price-hero">
-        <span class="price-title">PRECIO LÍDER ACTUAL</span>
+        <div class="price-title-row">
+          <span class="ornament-line left"></span>
+          <span class="price-title">OFERTA MÁXIMA EN SALA</span>
+          <span class="ornament-line right"></span>
+        </div>
+        
         <div class="current-price" id="currentPriceDisplay">
           <span class="currency">S/.</span>
-          <span class="amount" id="currentPriceValue">46,000</span>
+          <span class="amount" id="currentPriceValue">45,000</span>
         </div>
+
         <div class="leader-info">
-          <span>Postor Líder:</span>
-          <strong class="leader-name" id="currentLeaderName">USR-VIP-01 (Fernando O.)</strong>
-          <span class="bid-count-badge" id="totalBidsCount">1 puja</span>
+          <span class="leader-caption">Postor Líder Actual:</span>
+          <strong class="leader-name" id="currentLeaderName">Esperando Primera Oferta en Estrado</strong>
+          <span class="bid-count-badge" id="totalBidsCount">0 ofertas</span>
         </div>
       </div>
 
-      <!-- CONSOLA DE EMISIÓN DE PUJAS -->
+      <!-- CONSOLA DE EMISIÓN DE OFERTAS PRIVADAS -->
       <div class="bid-console">
-        <label class="console-label">Incremento Rápido de Oferta</label>
+        
+        <label class="console-label">Pilas de Incremento Inmediato (Pre-Aprobadas)</label>
         <div class="quick-bids-row">
-          <button class="btn btn-quick" data-add="1000">+ S/. 1,000</button>
-          <button class="btn btn-quick" data-add="2000">+ S/. 2,000</button>
-          <button class="btn btn-quick" data-add="5000">+ S/. 5,000</button>
+          <button class="btn btn-quick" data-add="1000">
+            <span class="gold-plus">+</span> S/. 1,000
+          </button>
+          <button class="btn btn-quick" data-add="2000">
+            <span class="gold-plus">+</span> S/. 2,000
+          </button>
+          <button class="btn btn-quick" data-add="5000">
+            <span class="gold-plus">+</span> S/. 5,000
+          </button>
+          <button class="btn btn-quick" data-add="10000">
+            <span class="gold-plus">+</span> S/. 10,000
+          </button>
         </div>
 
+        <!-- GRUPO DE ENTRADA Y BOTÓN MAESTRO DE REMATE -->
         <div class="input-bid-group">
           <span class="currency-prefix">S/.</span>
-          <input type="number" id="bidInput" class="bid-input" value="47000" min="47000" step="1000">
+          <input type="number" id="bidInput" class="bid-input" value="46000" min="46000" step="1000">
           <button class="btn btn-action-bid" id="btnEmitirPuja">
-            <span class="btn-text">¡OFERTAR AHORA!</span>
-            <span class="btn-subtext">Confirmación Atómica &lt; 200 ms</span>
+            <span class="btn-shine"></span>
+            <span class="btn-text">¡EMITIR OFERTA PRIVADA!</span>
+            <span class="btn-subtext">Confirmación Atómica Concurrente &lt; 200 ms</span>
           </button>
         </div>
 
         <div class="zero-trust-guarantee">
-          <span class="shield-icon">🛡️</span>
-          <span>Zero Trust: Oferta respaldada con depósito en custodia de S/. 5,000.</span>
+          <span class="shield-icon">🏛️</span>
+          <span><strong>Respaldo Zero-Trust Institucional:</strong> Oferta respaldada con depósito en garantía soberana de <strong>S/. 5,000</strong> bloqueada en custodia bancaria blindada.</span>
         </div>
 
-        <!-- MENSAJE DE FEEDBACK DE ERROR O ÉXITO -->
+        <!-- TOAST DE FEEDBACK DE ERROR O ÉXITO -->
         <div class="feedback-toast hidden" id="feedbackToast"></div>
       </div>
 
     </section>
 
-    <!-- COLUMNA 3: FEED EN TIEMPO REAL & PANEL DE INTELIGENCIA ARTIFICIAL -->
-    <section class="card sidebar-card">
+    <!-- ===================================================================
+         COLUMNA 3: INTELIGENCIA INSTITUCIONAL & ESTRADO DEL MARTILLERO
+         =================================================================== -->
+    <section class="card sidebar-card luxury-frame">
+      <div class="frame-corner top-left"></div>
+      <div class="frame-corner top-right"></div>
+      <div class="frame-corner bottom-left"></div>
+      <div class="frame-corner bottom-right"></div>
       
-      <!-- WIDGET DE EVALUACIÓN DE CONFIANZA IA -->
+      <!-- WIDGET DE EVALUACIÓN DE CONFIANZA IA (SWISS PRIVATE BANKING STYLE) -->
       <div class="ai-widget">
         <div class="widget-header">
           <div class="ai-title">
             <span class="sparkle-icon">✨</span>
-            <span>Evaluador de Confianza IA (Gemini)</span>
+            <div class="ai-title-text">
+              <span class="ai-main">Sovereign Risk Assessor</span>
+              <span class="ai-sub">GEMINI 1.5 FLASH • PRIVATE BANKING CORE</span>
+            </div>
           </div>
           <span class="circuit-badge closed" id="circuitBadge">CIRCUITO: CLOSED</span>
         </div>
 
         <div class="ai-meter-box">
           <div class="meter-info">
-            <span class="score-label">Score de Confianza</span>
-            <span class="score-number" id="aiScoreNumber">92<small>/100</small></span>
+            <span class="score-label">Rating de Solvencia Institucional:</span>
+            <span class="score-number" id="aiScoreNumber">92<small>/100 (AAA+)</small></span>
           </div>
           <div class="meter-bar">
             <div class="meter-fill" id="aiMeterFill" style="width: 92%;"></div>
           </div>
           <p class="ai-justification" id="aiJustificationText">
-            ✓ Postor con KYC verificado, historial crediticio solvente y tasa de cumplimiento del 100%. Garantía estándar: 10%.
+            ✓ Postor con KYC acreditado, calificación crediticia solvente y 100% de cumplimiento en sala. Garantía preferencial asignada: <strong>10% (S/. 4,500)</strong>.
           </p>
         </div>
 
-        <!-- INTERRUPTOR DE RESILIENCIA (CIRCUIT BREAKER DEMO) -->
+        <!-- PRUEBA DE RESILIENCIA (CIRCUIT BREAKER DEMO) -->
         <div class="circuit-demo-bar">
-          <span class="demo-label">Probar Resiliencia:</span>
-          <button class="btn btn-sm btn-secondary" id="btnToggleGemini">Simular Caída de Gemini</button>
+          <span class="demo-label">Auditoría de Resiliencia:</span>
+          <button class="btn btn-sm btn-secondary" id="btnToggleGemini">
+            <span class="btn-icon">⚡</span> Simular Caída de Gemini
+          </button>
         </div>
       </div>
 
-      <!-- TIMELINE DE AUDITORÍA Y PUJAS EN VIVO -->
+      <!-- TIMELINE DE AUDITORÍA Y SELLADO CRIPTOGRÁFICO DE OFERTAS -->
       <div class="live-feed-section">
         <div class="feed-header">
-          <h3>Historial Oficial de Pujas (NTP)</h3>
-          <span class="feed-badge">En Vivo</span>
+          <div class="feed-title-box">
+            <span class="feed-icon">📜</span>
+            <h3>Libro Notarial de Pujas (NTP)</h3>
+          </div>
+          <span class="feed-badge">ENCRIPTADO E2EE</span>
         </div>
 
         <div class="bids-timeline" id="bidsTimeline">
-          <!-- Item 1 -->
+          <!-- Item inicial informativo -->
           <div class="bid-item winner-bid">
-            <div class="bid-correlative">#1</div>
+            <div class="bid-correlative">#0</div>
             <div class="bid-details">
               <div class="bid-row-top">
-                <span class="bid-amount">S/. 46,000</span>
-                <span class="bid-time">Hace unos instantes</span>
+                <span class="bid-amount">S/. 45,000</span>
+                <span class="bid-time">Apertura de Sala</span>
               </div>
               <div class="bid-row-bottom">
-                <span class="bid-user">Fernando O. (USR-VIP-01)</span>
-                <span class="audit-tag">✓ Hash Verificado</span>
+                <span class="bid-user">Precio Base de Catálogo</span>
+                <span class="audit-tag">✓ Protocolo de Sala</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- PANEL DE CONTROL DEL MARTILLERO (MODERACIÓN EN VIVO) -->
+      <!-- PANEL DE CONTROL DEL MARTILLERO OFICIAL (GAVEL CONSOLE) -->
       <div class="moderator-section">
         <div class="moderator-header">
-          <span>Martillo Virtual</span>
-          <span class="admin-badge">Operador Oficial</span>
+          <div class="moderator-title">
+            <span class="gavel-icon">⚖️</span>
+            <span>Estrado del Martillero Oficial</span>
+          </div>
+          <span class="admin-badge">FE NOTARIAL</span>
         </div>
         <div class="hammer-actions">
-          <button class="btn btn-sm btn-hammer" id="btnMartillo1">¡A la una!</button>
-          <button class="btn btn-sm btn-hammer" id="btnMartillo2">¡A las dos!</button>
-          <button class="btn btn-sm btn-adjudicar" id="btnAdjudicar">¡MARTILLAZO FINAL!</button>
+          <button class="btn btn-sm btn-hammer" id="btnMartillo1">¡PRIMERA LLAMADA!</button>
+          <button class="btn btn-sm btn-hammer" id="btnMartillo2">¡SEGUNDA LLAMADA!</button>
+          <button class="btn btn-sm btn-adjudicar" id="btnAdjudicar">
+            <span>🔨</span> ¡ADJUDICACIÓN DEFINITIVA!
+          </button>
         </div>
       </div>
 
