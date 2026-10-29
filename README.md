@@ -54,7 +54,8 @@ PlataformaSubastas-arquitSoft-02-Fernando/
 │   │   └── Nivel4-DiagramadeCodigo.md
 │   └── img/                                # Recursos gráficos y diagramas
 ├── tecnologia/
-│   └── boilerplate-clean-arquitecture/     # Implementación referencial en TypeScript
+│   ├── livebid-backend/                    # Implementación objetivo en Go
+│   └── boilerplate-clean-arquitecture/     # Referencia histórica en TypeScript
 │       ├── src/app/dominio/                # Entidades, agregados y contratos
 │       ├── src/app/aplicacion/             # Caso de uso: ProcesarPuja
 │       ├── src/app/infraestructura/        # Adaptadores en memoria y mocks
@@ -77,7 +78,19 @@ PlataformaSubastas-arquitSoft-02-Fernando/
 
 ---
 
-## ⚙️ Ejecución de las Pruebas del Boilerplate Tecnológico
+## ⚙️ Estado de implementación
+
+La implementación objetivo es el backend Go ubicado en
+[`tecnologia/livebid-backend`](tecnologia/livebid-backend). Las especificaciones
+`001`, `002` y `003` describen el trabajo pendiente de integración con Redis,
+PostgreSQL, pasarela de pagos, IA y WebSockets. Las implementaciones locales
+del backend y los dobles de prueba no deben considerarse integraciones de
+producción.
+
+## ⚙️ Ejecución de las Pruebas de Referencia
+
+El boilerplate TypeScript conserva pruebas de referencia para las reglas de
+dominio. Estas pruebas no certifican el backend Go.
 
 El proyecto cuenta con un conjunto de pruebas unitarias que verifican las reglas de dominio, el patrón Estado y el desacoplamiento de Clean Architecture:
 

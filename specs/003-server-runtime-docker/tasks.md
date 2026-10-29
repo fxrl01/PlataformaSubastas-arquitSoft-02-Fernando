@@ -1,55 +1,30 @@
-# Tareas de Implementación: Runtime del Servidor, Orquestación y Entorno Docker
+# Tareas de Implementación: Runtime Go, Orquestación y Docker
 
 > **Feature ID:** `003-server-runtime-docker`  
-> **Fase:** Plan de Tareas de Implementación (SDD)  
-> **Basado en:** `spec.md` y `plan.md`
+> **Implementación objetivo:** `tecnologia/livebid-backend`
+> **Estado:** En progreso; no certificada para producción
 
----
+## Runtime y API
 
-## Estado General del Feature: [x] COMPLETADO Y CERTIFICADO (6/6 tareas completadas)
+- [x] Mantener el punto de entrada en
+  `tecnologia/livebid-backend/cmd/server/main.go`.
+- [ ] Exponer `/health` y las rutas de subastas mediante handlers Go.
+- [ ] Añadir configuración tipada desde variables de entorno.
+- [ ] Implementar apagado ordenado y propagación de señales.
 
----
+## Infraestructura
 
-### Fase 1: Esquema DDL y Docker Compose
-- [x] **Task 1.1: Crear esquema de base de datos relacional `docker/init.sql`**
-  - *Archivo:* `docker/init.sql`
-  - *Acción:* Tablas normalizadas `usuarios`, `subastas`, `pujas`, `garantias` y `logs_auditoria` con índices B-Tree e inserción de datos semilla.
-  - *Certificado:* Esquema DDL validado.
+- [ ] Reemplazar adaptadores locales por Redis y PostgreSQL reales.
+- [ ] Actualizar [Dockerfile](../../Dockerfile) para compilar y ejecutar el
+  módulo Go.
+- [ ] Alinear `docker-compose.yml` con el binario Go y sus healthchecks.
+- [ ] Verificar el esquema de `docker/init.sql` contra los repositorios Go.
 
-- [x] **Task 1.2: Configurar `docker-compose.yml` y `.env.example`**
-  - *Archivos:* `docker-compose.yml`, `.env.example`
-  - *Acción:* Definición de servicios `livebid-db` (Postgres 16), `livebid-cache` (Redis 7) y `livebid-api` en red interna `livebid-net`.
-  - *Certificado:* Sintaxis de Docker Compose v5 validada.
+## Verificación
 
-- [x] **Task 1.3: Crear `Dockerfile` para la aplicación**
-  - *Archivo:* `Dockerfile`
-  - *Acción:* Imagen basada en `node:24-alpine` con soporte nativo para TypeScript strip-types y entrypoint a `src/main.ts`.
-  - *Certificado:* Dockerfile estructurado.
+- [ ] Ejecutar pruebas de integración HTTP contra el binario Go.
+- [ ] Verificar arranque reproducible con `docker compose up`.
+- [ ] Probar disponibilidad y reconexión de Redis/PostgreSQL.
+- [ ] Documentar únicamente escenarios certificados por pruebas reales.
 
----
-
-### Fase 2: Bootstrapping del Servidor (`src/main.ts`)
-- [x] **Task 2.1: Implementar punto de entrada `src/main.ts` con Clean Architecture**
-  - *Archivo:* `tecnologia/boilerplate-clean-arquitecture/src/main.ts`
-  - *Acción:* Cableado de dependencias (DIP), routing HTTP nativo sin dependencias externas pesadas.
-  - *Certificado:* Arranque en puerto configurable y Health Check.
-
-- [x] **Task 2.2: Implementar endpoints REST de la API**
-  - *Archivo:* `tecnologia/boilerplate-clean-arquitecture/src/main.ts`
-  - *Acción:* Mapeo de `GET /health`, `GET /api/v1/subastas/:id`, `POST /api/v1/subastas/:id/garantia`, `POST /api/v1/subastas/:id/puja` y `POST /api/v1/subastas/:id/liquidar`.
-  - *Certificado:* Validado en tests HTTP de integración.
-
----
-
-### Fase 3: Suite de Pruebas de Integración
-- [x] **Task 3.1: Crear suite de integración `servidor-integracion.pruebas.ts`**
-  - *Archivo:* `tecnologia/boilerplate-clean-arquitecture/src/app/pruebas/servidor-integracion.pruebas.ts`
-  - *Resultados de Certificación:*
-    - ✅ Test 1: `GET /health` responde status 200 y JSON con estado del sistema.
-    - ✅ Test 2: `GET /api/v1/subastas/SUB-2026-001` retorna datos del lote en vivo.
-    - ✅ Test 3: `POST /puja` sin garantía es rechazado en HTTP con status 403 (Zero Trust).
-    - ✅ Test 4: `POST /garantia` evalúa riesgo con IA y constituye depósito bancario.
-    - ✅ Test 5: `POST /puja` con garantía activa es aceptada con status 200 y broadcast.
-    - ✅ Test 6: `POST /liquidar` captura fondos del ganador al martillazo final.
-  - *Ejecución:* `NODE_ENV=test node --experimental-strip-types src/app/pruebas/servidor-integracion.pruebas.ts` -> **100% OK**.
-
+El antiguo servidor TypeScript no es el runtime objetivo de esta feature.

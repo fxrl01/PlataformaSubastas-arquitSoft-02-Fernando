@@ -2,7 +2,8 @@
 
 > **Feature ID:** `003-server-runtime-docker`  
 > **Fase:** Planificación Técnica (SDD) · **Basado en:** `spec.md`  
-> **Tecnologías:** Docker, Docker Compose, PostgreSQL 16, Redis 7, Node.js 24 TypeScript
+> **Tecnologías:** Docker, Docker Compose, PostgreSQL 16, Redis 7, Go 1.23+
+> **Implementación objetivo:** `tecnologia/livebid-backend`
 
 ---
 
@@ -13,7 +14,7 @@ graph TD
     Client["🌐 Cliente Web / Móvil"]
     
     subgraph DockerNetwork["Red Docker: livebid-net"]
-        API["⚡ livebid-api<br><i>[Node.js 24 TypeScript]</i><br>Puerto: 3000"]
+        API["⚡ livebid-api<br><i>[Go 1.23+]</i><br>Puerto: 3000"]
         Redis["🧠 livebid-cache<br><i>[Redis 7 Alpine]</i><br>Puerto: 6379"]
         Postgres["🗄️ livebid-db<br><i>[PostgreSQL 16 Alpine]</i><br>Puerto: 5432"]
     end
@@ -26,13 +27,15 @@ graph TD
 ### Servicios en `docker-compose.yml`:
 1. **`livebid-db`:** Imagen `postgres:16-alpine`. Expone puerto `5432`. Monta `docker/init.sql` en `/docker-entrypoint-initdb.d/init.sql` para inicialización automática.
 2. **`livebid-cache`:** Imagen `redis:7-alpine`. Expone puerto `6379`. Configurado con política de persistencia AOF (`--appendonly yes`).
-3. **`livebid-api`:** Contenedor Node.js 24 para ejecutar el servidor LiveBid con enlace a `livebid-db` y `livebid-cache`.
+3. **`livebid-api`:** Contenedor Go para ejecutar `tecnologia/livebid-backend`
+   con enlace a `livebid-db` y `livebid-cache`.
 
 ---
 
-## 2. Bootstrapping del Servidor (`src/main.ts`)
+## 2. Bootstrapping del Servidor (`cmd/server/main.go`)
 
-El archivo `src/main.ts` orquesta el arranque del sistema siguiendo estrictamente la **Inversión de Dependencias (DIP)**:
+El archivo `cmd/server/main.go` orquesta el arranque del sistema siguiendo
+estrictamente la **Inversión de Dependencias (DIP)**:
 
 ```text
 Configuración (.env)
@@ -72,4 +75,3 @@ El script de inicialización contiene:
 | `POST`| `/api/v1/subastas/:id/garantia` | `{ postorId, precioBase }` | Retiene garantía con evaluación de IA y Circuit Breaker |
 | `POST`| `/api/v1/subastas/:id/puja` | `{ postorId, monto }` | Procesa puja atómica con Anti-Sniping |
 | `POST`| `/api/v1/subastas/:id/liquidar` | `{ postorGanadorId, montoFinal }` | Adjudicación final: captura al ganador y libera perdedores |
-

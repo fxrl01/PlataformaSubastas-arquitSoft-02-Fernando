@@ -9,7 +9,7 @@
 
 ## 1. Propósito y Motivación de Negocio
 
-Para que la arquitectura de **LiveBid** sea completamente operativa, reproducible y óptima para el desarrollo en equipo y evaluación académica, se requiere un **punto de entrada unificado (`src/main.ts`)** y un **entorno de infraestructura multi-contenedor con Docker Compose**.
+Para que la arquitectura de **LiveBid** sea completamente operativa, reproducible y óptima para el desarrollo en equipo y evaluación académica, se requiere un **punto de entrada Go (`tecnologia/livebid-backend/cmd/server/main.go`)** y un **entorno de infraestructura multi-contenedor con Docker Compose**.
 
 Esta especificación formaliza:
 1. **Bootstrapping del Servidor:** Inicialización de todos los módulos mediante Inyección de Dependencias (DIP) conectando los casos de uso (`ProcesarPuja`, `RetenerGarantia`, `LiquidarSubasta`).
@@ -47,8 +47,8 @@ Esta especificación formaliza:
 
 ### Escenario 1: Arranque exitoso del servidor y endpoint de salud
 ```gherkin
-Given el entorno de ejecución Node.js con variables de configuración
-When se inicia el servidor principal mediante "src/main.ts"
+Given el entorno de ejecución Go con variables de configuración
+When se inicia el servidor principal mediante "cmd/server/main.go"
 Then el servidor inicializa la inyección de dependencias de todos los módulos
 And levanta el servidor HTTP en el puerto 3000
 And una petición "GET /health" responde con status 200 y JSON { status: "OK", timestamp: "...", version: "1.0.0" }
@@ -90,4 +90,3 @@ And se aplican constraints de unicidad y los índices B-Tree en "subasta_id" y "
 | `pujas` | Historial inmutable de ofertas aceptadas | `id` (VARCHAR) | `subasta_id`, `postor_id` | `(subasta_id, correlativo)` |
 | `garantias` | Depósitos congelados en custodia (Escrow) | `id` (VARCHAR) | `subasta_id`, `postor_id` | `(subasta_id, postor_id, estado)` |
 | `logs_auditoria` | Bitácora forense de eventos con hash SHA-256 | `id` (BIGSERIAL)| `subasta_id` | `created_at` |
-

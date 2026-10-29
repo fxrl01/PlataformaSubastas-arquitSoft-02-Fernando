@@ -1,154 +1,110 @@
-# Plan Técnico: Motor de Pujas en Tiempo Real (Realtime Bid Engine)
+# Plan Técnico: Motor de Pujas en Tiempo Real
 
 > **Feature ID:** `001-realtime-bid-engine`  
-> **Fase:** Planificación Técnica (SDD) · **Basado en:** `spec.md`  
-> **Patrones Clave:** Clean Architecture, State, Observer, Mutex Atómico, Adapter
+> **Implementación objetivo:** Go 1.23+ · Clean/Hexagonal Architecture
+> **Estado:** Diseño parcialmente implementado; adaptadores externos pendientes
 
----
+## 1. Arquitectura y flujo
 
-## 1. Arquitectura Técnica del Feature
-
-El motor de pujas se divide en dos trayectorias de datos para cumplir con el presupuesto de latencia ($< 200$ ms) y garantizar la durabilidad legal:
-
-1. **Hot Path (Camino Caliente en Memoria):**  
-   Recepción de WebSocket $\rightarrow$ Validación JWT $\rightarrow$ Verificación de Garantía $\rightarrow$ Mutex Atómico en Redis $\rightarrow$ Evaluación de Dominio $\rightarrow$ Publicación Pub/Sub en Redis $\rightarrow$ Broadcast WebSocket a la sala. **(Tiempo objetivo: $< 45$ ms)**.
-2. **Cold Path (Camino Frío Asíncrono):**  
-   Publicación de evento `PujaAceptada` en RabbitMQ $\rightarrow$ Worker en segundo plano $\rightarrow$ Persistencia transaccional en PostgreSQL 16 y generación de hash de auditoría. **(Tiempo objetivo: desacoplado, $< 500$ ms)**.
+El camino caliente recibe la puja, valida identidad y garantía, adquiere un
+lock Redis, ejecuta las reglas del agregado y publica el resultado. La
+persistencia definitiva y la auditoría se realizan con PostgreSQL; RabbitMQ se
+incorporará cuando se implemente el worker asíncrono.
 
 ```mermaid
 graph TD
-    Client["📱 Cliente Postor (SPA)"]
-    WSHub["⚡ WebSocket Gateway Handler"]
-    UseCase["🎯 ProcesarPujaUseCase"]
-    RedisLock[("🧠 Redis Mutex (SETNX)")]
-    RedisPubSub[("📢 Redis Pub/Sub")]
-    Domain["📦 Subasta (Aggregate)"]
-    RabbitQueue[("📨 RabbitMQ (Cola 'pujas.confirmadas')")]
-    PostgresDB[("🗄️ PostgreSQL 16")]
+    Client["Cliente SPA"]
+    Handler["HTTP/WebSocket handler"]
+    Service["AuctionService"]
+    Domain["domain.Subasta"]
+    Redis["Redis 7: lock SET NX PX"]
+    Postgres["PostgreSQL 16"]
+    Notifier["RoomNotifierPort"]
 
-    Client -->|1. emit 'puja:emitir'| WSHub
-    WSHub -->|2. Inyecta Command| UseCase
-    UseCase -->|3. Adquiere lock en <2ms| RedisLock
-    UseCase -->|4. Aplica reglas (Anti-sniping)| Domain
-    UseCase -->|5. Publica nuevo precio| RedisPubSub
-    UseCase -->|6. Encola para auditoría| RabbitQueue
-    UseCase -->|7. Libera lock| RedisLock
-    RedisPubSub -.->|8. Broadcast instantáneo| WSHub
-    WSHub -.->|9. Evento 'sala:nuevo_precio'| Client
-    RabbitQueue -->|10. Persistencia diferida| PostgresDB
+    Client --> Handler --> Service --> Domain
+    Service --> Redis
+    Service --> Postgres
+    Service --> Notifier
+    Notifier --> Client
 ```
 
----
+La implementación actual del caso de uso está en
+`tecnologia/livebid-backend/internal/core/services/auction_service.go`; los
+puertos están en `internal/core/domain/ports.go`.
 
-## 2. Contratos de Comunicación (WebSocket Protocol)
+## 2. Contrato de aplicación
 
-### Eventos Entrantes (Cliente $\rightarrow$ Servidor)
-
-#### `puja:emitir`
-Payload transmitido por el cliente al enviar una postura:
-```typescript
-interface EmitirPujaPayload {
-  subastaId: string;      // ID único del lote (ej. 'SUB-2026-001')
-  monto: number;          // Monto total ofertado en soles (ej. 5200)
-  postorId: string;       // Identificador del usuario emisor
-  timestampCliente: number; // Timestamp Unix en cliente (solo para métricas de latencia de red)
+```go
+type ProcesarPujaCmd struct {
+    PujaID    string
+    SubastaID string
+    PostorID  string
+    Monto     float64
+    Timestamp time.Time
 }
-```
 
-### Eventos Salientes (Servidor $\rightarrow$ Cliente)
-
-#### `puja:confirmada` (Unicast al postor emisor)
-```typescript
-interface PujaConfirmadaPayload {
-  exito: true;
-  pujaId: string;         // Identificador canónico (ej. 'PUJ-1729640000-1')
-  monto: number;
-  correlativo: number;    // Secuencia numérica en la subasta
-  timestampServidor: string; // ISO-8601 del servidor oficial
-  nuevoCierreProgramado: string; // Fecha de fin actualizada por Anti-Sniping
+type PujaResponseDTO struct {
+    SubastaID       string
+    PujaID          string
+    PostorLiderID   string
+    PrecioActual    float64
+    TiempoExtendido bool
+    FechaCierre     time.Time
+    Estado          domain.EstadoSubasta
 }
 ```
 
-#### `sala:nuevo_precio` (Broadcast a todos los espectadores de la sala)
-```typescript
-interface SalaNuevoPrecioPayload {
-  subastaId: string;
-  precioActual: number;
-  postorLiderId: string;
-  aliasPostorLider: string; // Ej. 'Fernando O.***' (protección de privacidad)
-  tiempoRestanteMs: number;
-  esAntiSnipingActivado: boolean;
+El timestamp oficial lo asigna el servidor. El identificador del postor debe
+provenir del contexto autenticado y no de un campo confiable enviado por el
+cliente.
+
+## 3. Puertos de dominio
+
+```go
+type BidLockPort interface {
+    AdquirirLock(ctx context.Context, subastaID string, ttl time.Duration) (UnlockFunc, error)
+}
+
+type SubastaRepository interface {
+    ObtenerPorID(ctx context.Context, id string) (*Subasta, error)
+    Guardar(ctx context.Context, subasta *Subasta) error
+}
+
+type PaymentEscrowPort interface {
+    ValidarGarantiaActiva(ctx context.Context, postorID, subastaID string) (bool, error)
+}
+
+type RoomNotifierPort interface {
+    BroadcastNuevaPuja(ctx context.Context, subastaID string, puja Puja, extendida bool) error
 }
 ```
 
-#### `puja:rechazada` (Unicast al postor emisor ante error)
-```typescript
-interface PujaRechazadaPayload {
-  exito: false;
-  codigoError: 'MONTO_INSUFICIENTE' | 'SUBASTA_CERRADA' | 'GARANTIA_REQUERIDA' | 'POSTOR_YA_ES_LIDER' | 'COLISION_CONCURRENTE';
-  mensaje: string;
-  precioActualVigente: number;
-  incrementoMinimoRequerido: number;
-}
+## 4. Lock Redis
+
+El adaptador de producción debe ejecutar:
+
+```text
+SET lock:subasta:{subastaID} {requestID} NX PX 1500
 ```
 
----
+Si Redis devuelve `nil`, se devuelve un error de colisión. La liberación debe
+usar un script Lua que compare `requestID` antes de eliminar la clave. El
+`LocalLockAdapter` actual es solo un adaptador de desarrollo y no certifica
+concurrencia distribuida.
 
-## 3. Algoritmo del Lock Atómico Distribuido (Redis Mutex)
+## 5. Reglas de dominio
 
-Para evitar condiciones de carrera cuando dos postores pujan en el mismo instante exacto:
+`domain.Subasta.ValidarYRegistrarPuja` valida estado, postor líder, incremento
+mínimo y anti-sniping. En los últimos 15 segundos agrega 30 segundos al cierre.
+La puja aceptada se persiste y se notifica después de aplicar el agregado.
 
-1. **Adquisición del Lock:**
-   ```bash
-   SET lock:subasta:{subastaId} {workerUuid} NX PX 1500
-   ```
-   - `NX`: Solo asigna la clave si NO existe previamente.
-   - `PX 1500`: Expiración automática a los 1,500 ms (evita deadlock si el nodo falla).
-2. **Si `SET` devuelve `null`:**  
-   Significa que otro proceso está evaluando una puja en esa misma sala. El sistema retorna de inmediato `COLISION_CONCURRENTE` para que el cliente reintente automáticamente o reciba el nuevo precio.
-3. **Liberación Segura con Script Lua:**
-   ```lua
-   if redis.call("get", KEYS[1]) == ARGV[1] then
-     return redis.call("del", KEYS[1])
-   else
-     return 0
-   end
-   ```
-   Garantiza que un proceso no elimine el lock de otro proceso si hubo un retardo por recolección de basura o red.
+## 6. Verificación
 
----
+- Unitarias Go para dominio y `AuctionService`.
+- Pruebas concurrentes con Redis real: una aceptación por incremento.
+- Pruebas de integración con PostgreSQL y el adaptador de notificación.
+- Pruebas de contrato para errores HTTP/WebSocket.
+- Pruebas de latencia contra los umbrales de la constitución.
 
-## 4. Contratos de Puertos en Dominio (Clean Architecture)
-
-```typescript
-// Puerto de concurrencia
-export interface IBidEngineLockPort {
-  adquirirLock(subastaId: string, ttlMs?: number): Promise<boolean>;
-  liberarLock(subastaId: string): Promise<void>;
-}
-
-// Puerto de persistencia y estado
-export interface ISubastaRepository {
-  obtenerPorId(id: string): Promise<Subasta | null>;
-  guardar(subasta: Subasta): Promise<void>;
-}
-
-// Puerto de verificación financiera Zero Trust
-export interface IPaymentEscrowPort {
-  validarGarantiaActiva(postorId: string, subastaId: string): Promise<boolean>;
-}
-
-// Puerto de difusión en tiempo real
-export interface IRoomNotifierPort {
-  difundirNuevaPuja(puja: Puja, subasta: Subasta): Promise<void>;
-}
-```
-
----
-
-## 5. Estrategia de Testing y Verificación
-
-1. **Tests Unitarios Rápidos:** Ejecutables en memoria sin bases de datos externas para validar las reglas del dominio (`Subasta` y `ProcesarPujaUseCase`).
-2. **Tests de Concurrencia Simultánea:** Lanzar 50 promesas asíncronas en paralelo compitiendo por la misma subasta con el mismo incremento. Verificar que exactamente 1 puja sea aprobada y 49 rechazadas con correlativo correlativo estricto.
-3. **Tests de Anti-Sniping:** Simular una subasta con tiempo de fin a 5 segundos y verificar que la puja aceptada extienda el reloj a 35 segundos.
-
+Las suites TypeScript del boilerplate son referencia histórica y no certifican
+el backend Go.

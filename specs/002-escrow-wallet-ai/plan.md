@@ -1,162 +1,153 @@
 # Plan Técnico: Billetera de Custodia (Escrow) y Evaluación de Riesgo con IA
 
 > **Feature ID:** `002-escrow-wallet-ai`  
-> **Fase:** Planificación Técnica (SDD) · **Basado en:** `spec.md`  
-> **Patrones:** Clean Architecture, Adapter, Circuit Breaker, Strategy
+> **Fase:** Planificación Técnica (SDD)
+> **Implementación objetivo:** Go 1.23+ · Clean/Hexagonal Architecture
+> **Estado:** Diseño alineado; adaptadores externos pendientes de integración
 
----
+Este plan describe la implementación real del backend Go. Los dobles de prueba
+se limitan a las pruebas unitarias; Redis, PostgreSQL, el proveedor de pagos y
+el proveedor de IA deben conectarse mediante adaptadores de infraestructura.
 
-## 1. Arquitectura de Componentes del Feature
+## 1. Arquitectura de componentes
 
 ```mermaid
 graph TD
-    Client["📱 Postor (SPA)"]
-    Controller["⚡ GarantiasControlador"]
-    UCRetener["🎯 RetenerGarantiaCasoUso"]
-    UCLiquidar["🎯 LiquidarSubastaCasoUso"]
-    
-    CircuitBreaker["🛡️ CircuitBreakerInterceptor"]
-    AIAgent["🤖 GeminiRiesgoAdapter (API Gemini)"]
-    AIFallback["🧠 HeuristicaLocalFallback"]
-    
-    PortRepo["🗄️ ICustodiaGarantiaRepository"]
-    PortBank["🏛️ IPasarelaBancariaPort (Niubiz/Stripe)"]
+    Client["Cliente SPA"]
+    HTTP["HTTP/WebSocket handlers"]
+    Service["AuctionService / casos de uso"]
+    Domain["Dominio Go: Subasta y Garantía"]
+    Redis["Redis 7: lock y estado caliente"]
+    Postgres["PostgreSQL 16: garantías y auditoría"]
+    Risk["AIRiskPort"]
+    Gemini["Adaptador Gemini"]
+    Fallback["Fallback heurístico"]
+    Payment["PaymentEscrowPort"]
+    Gateway["Adaptador de pasarela bancaria"]
 
-    Client -->|1. Solicita ingreso a sala| Controller
-    Controller -->|2. Ejecuta caso de uso| UCRetener
-    
-    UCRetener -->|3. Evalúa riesgo con IA| CircuitBreaker
-    CircuitBreaker -->|Modo Normal (CLOSED)| AIAgent
-    CircuitBreaker -.->|Falla o Timeout (OPEN)| AIFallback
-    
-    UCRetener -->|4. Retiene fondos ajustados| PortBank
-    UCRetener -->|5. Guarda entidad Garantia| PortRepo
-
-    Controller -->|Al adjudicar remate| UCLiquidar
-    UCLiquidar -->|Captura fondos del ganador| PortBank
-    UCLiquidar -->|Libera fondos de perdedores| PortBank
-    UCLiquidar -->|Actualiza estados| PortRepo
+    Client --> HTTP
+    HTTP --> Service
+    Service --> Domain
+    Service --> Redis
+    Service --> Postgres
+    Service --> Risk
+    Risk --> Gemini
+    Risk -.-> Fallback
+    Service --> Payment
+    Payment --> Gateway
 ```
 
----
+La dependencia del dominio apunta hacia adentro:
 
-## 2. Implementación del Patrón Circuit Breaker para la IA
-
-Para responder a la pregunta de evaluación: *"¿Si cae Gemini estás preparados?"*:
-
-### Estados del Circuit Breaker
-1. **CLOSED (Cerrado - Normal):** Las peticiones fluyen directamente hacia la API de Gemini. Si una llamada tiene éxito, el contador de fallos se reinicia.
-2. **OPEN (Abierto - Fallback Activo):** Si ocurren **3 fallos consecutivos** o la API no responde en $< 2,000$ ms, el circuito se abre de inmediato. Las llamadas ya no viajan a Gemini (evitando saturar el servidor con esperas infinitas) y son atendidas instantáneamente por el `HeuristicaLocalFallback`.
-3. **HALF_OPEN (Semi-abierto - Prueba de Salud):** Tras 10 segundos, se envía una petición de prueba a Gemini. Si responde con éxito, el circuito vuelve a `CLOSED`; si falla, vuelve a `OPEN`.
-
-### Algoritmo del Fallback Local Heurístico
-```typescript
-interface EvaluacionRiesgoIA {
-  score: number;             // 0 a 100
-  nivelRiesgo: 'BAJO' | 'MEDIO' | 'ALTO';
-  porcentajeGarantia: number; // 0.10 ó 0.20
-  justificacion: string;
-  modoFallbackActivado: boolean;
-}
+```text
+handlers -> services -> domain <- adapters
 ```
 
----
+Los puertos actualmente definidos están en
+`tecnologia/livebid-backend/internal/core/domain/ports.go`:
 
-## 3. Modelo de Entidades y Puertos en Dominio
+- `SubastaRepository`
+- `BidLockPort`
+- `PaymentEscrowPort`
+- `RoomNotifierPort`
+- `AIRiskPort`
 
-### Entidad `Garantia`
-```typescript
-export const EstadoGarantia = {
-  RETENIDA: 'RETENIDA',
-  CAPTURADA_COBRO: 'CAPTURADA_COBRO',
-  LIBERADA: 'LIBERADA'
-} as const;
+## 2. Modelo de dominio y contratos Go
 
-export type EstadoGarantia = typeof EstadoGarantia[keyof typeof EstadoGarantia];
+La entidad `Subasta` vive en
+`tecnologia/livebid-backend/internal/core/domain/auction.go` y concentra las
+reglas de estado, incremento mínimo y anti-sniping. La entidad `Garantia`
+deberá conservar sus transiciones:
 
-export class Garantia {
-  public readonly id: string;
-  public readonly subastaId: string;
-  public readonly postorId: string;
-  public readonly montoRetenido: number;
-  public readonly autorizacionBancariaId: string;
-  public estado: EstadoGarantia;
-  public readonly scoreConfianzaIA: number;
-  public readonly fechaRetencion: Date;
-
-  constructor(...) { ... }
-
-  public capturar(): void {
-    if (this.estado !== EstadoGarantia.RETENIDA) throw new Error(...);
-    this.estado = EstadoGarantia.CAPTURADA_COBRO;
-  }
-
-  public liberar(): void {
-    if (this.estado !== EstadoGarantia.RETENIDA) throw new Error(...);
-    this.estado = EstadoGarantia.LIBERADA;
-  }
-}
+```text
+RETENIDA -> CAPTURADA_COBRO
+RETENIDA -> LIBERADA
 ```
 
-### Contratos de Puertos (Interfaces de Dominio)
-```typescript
-export interface IAgenteRiesgoPort {
-  evaluarPostor(postorId: string, subastaId: string): Promise<EvaluacionRiesgoIA>;
-}
+El puerto de pagos debe evolucionar para representar operaciones idempotentes
+de retención, captura y liberación, conservando el identificador de
+autorización bancaria. Las respuestas de infraestructura no deben filtrarse al
+dominio.
 
-export interface IPasarelaBancariaPort {
-  retener(postorId: string, monto: number): Promise<{ autorizacionId: string; exito: boolean }>;
-  capturar(autorizacionId: string): Promise<boolean>;
-  liberar(autorizacionId: string): Promise<boolean>;
-}
+## 3. Circuit breaker de evaluación de riesgo
 
-export interface ICustodiaGarantiaRepository {
-  obtenerGarantia(postorId: string, subastaId: string): Promise<Garantia | null>;
-  obtenerPorSubasta(subastaId: string): Promise<Garantia[]>;
-  guardar(garantia: Garantia): Promise<void>;
-}
-```
+El adaptador que implemente `AIRiskPort` debe aplicar estos parámetros de
+`spec.md`:
 
----
+- `CLOSED`: llamadas normales al proveedor de IA.
+- `OPEN`: fallback local sin llamar al proveedor.
+- `HALF_OPEN`: una llamada de prueba después de 10 segundos.
+- Apertura después de **3 fallos consecutivos** o timeout de **2 segundos**.
+- Fallback determinista: score `75`, garantía estándar del `10%`.
 
-## 4. Diagrama de Secuencia: Retención con Evaluación de IA y Circuit Breaker
+El timeout debe aplicarse con `context.WithTimeout`; no se deben dejar
+goroutines o conexiones bloqueadas esperando indefinidamente.
+
+## 4. Persistencia y consistencia
+
+- `PostgresSubastaRepository` y `PostgresGarantiaRepository` implementan los
+  puertos de persistencia usando transacciones.
+- La retención debe ser idempotente por `(subasta_id, postor_id)` y evitar
+  garantías duplicadas.
+- La liquidación debe capturar al ganador y liberar a los perdedores dentro de
+  una operación coordinada, registrando cada resultado en auditoría.
+- Los errores del proveedor de pagos deben conservarse como errores explícitos;
+  no se deben convertir en respuestas exitosas.
+
+## 5. Integración de pagos
+
+`PaymentEscrowPort` será implementado por un adaptador concreto del proveedor
+seleccionado. Las credenciales y URLs se obtendrán desde configuración del
+entorno, nunca desde el dominio ni desde el código fuente.
+
+El adaptador debe:
+
+1. Crear una retención con una clave idempotente.
+2. Devolver el identificador de autorización.
+3. Capturar únicamente una garantía en estado `RETENIDA`.
+4. Liberar únicamente garantías en estado `RETENIDA`.
+5. Traducir códigos del proveedor a errores de infraestructura tipados.
+
+## 6. API y flujo de ejecución
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor Postor as 👤 Postor
-    participant Ctrl as ⚡ GarantiasControlador
-    participant UC as 🎯 RetenerGarantiaCasoUso
-    participant CB as 🛡️ CircuitBreaker
-    participant IA as 🤖 GeminiRiesgoAdapter
-    participant Fallback as 🧠 HeuristicaFallback
-    participant Bank as 🏛️ PasarelaBancaria
-    participant Repo as 🗄️ GarantiaRepo
+    actor Postor
+    participant Handler as HTTP/WebSocket handler
+    participant Service as Application service
+    participant Risk as AIRiskPort
+    participant Payment as PaymentEscrowPort
+    participant Repo as PostgreSQL repository
 
-    Postor ->>+ Ctrl: POST /api/v1/subastas/{id}/garantia
-    Ctrl ->>+ UC: ejecutar(postorId, subastaId)
-    
-    alt Circuito Cerrado (Gemini Disponible)
-        UC ->>+ CB: evaluar(postorId)
-        CB ->>+ IA: analizarPerfilPostor(postorId)
-        IA -->>- CB: { score: 90, riesgo: 'BAJO', porcentaje: 0.10 }
-        CB -->>- UC: EvaluacionRiesgo
-    else Circuito Abierto o Falla (Gemini Caído)
-        UC ->>+ CB: evaluar(postorId)
-        CB ->>+ Fallback: calcularHeuristicaLocal(postorId)
-        Fallback -->>- CB: { score: 75, riesgo: 'MEDIO', modoFallback: true }
-        CB -->>- UC: EvaluacionRiesgo (Fallback)
-    end
-
-    Note over UC: Calcula monto de garantía: precioBase * porcentaje (10% o 20%)
-    
-    UC ->>+ Bank: retener(postorId, montoCalculado)
-    Bank -->>- UC: { autorizacionId: 'AUTH-991', exito: true }
-
-    UC ->>+ Repo: guardar(Garantia: RETENIDA)
-    Repo -->>- UC: ok
-
-    UC -->>- Ctrl: GarantiaExitosaDTO
-    Ctrl -->>- Postor: 200 OK { estado: 'RETENIDA', monto: 5000, scoreIA: 90 }
+    Postor ->> Handler: Solicitar garantía
+    Handler ->> Service: RetenerGarantiaCommand
+    Service ->> Risk: EvaluarRiesgo(ctx, postor, subasta)
+    Risk -->> Service: score y porcentaje
+    Service ->> Payment: RetenerGarantia(...)
+    Payment -->> Service: authorizationID
+    Service ->> Repo: Guardar garantía RETENIDA
+    Repo -->> Service: confirmado
+    Service -->> Handler: DTO de garantía
+    Handler -->> Postor: 200/4xx/5xx
 ```
 
+Los handlers deberán validar el payload y mapear errores de dominio e
+infraestructura a códigos HTTP definidos en `spec.md`. La identidad del
+postor debe provenir del contexto autenticado, no de un campo confiable del
+payload.
+
+## 7. Verificación
+
+La cobertura se divide en:
+
+1. **Unitarias:** entidad, transiciones, cálculo de garantía y circuit breaker,
+   usando dobles únicamente en los puertos.
+2. **Integración:** PostgreSQL, Redis y proveedor de pagos sandbox.
+3. **Contrato:** respuestas HTTP/WebSocket y errores públicos.
+4. **Resiliencia:** timeout, tres fallos consecutivos, recuperación
+   `HALF_OPEN` e idempotencia.
+
+La certificación de la feature solo podrá marcarse como completa cuando las
+pruebas de integración con los servicios reales o sandbox pasen. Las pruebas
+del antiguo boilerplate TypeScript quedan como referencia histórica y no son
+la evidencia de certificación del backend Go.
