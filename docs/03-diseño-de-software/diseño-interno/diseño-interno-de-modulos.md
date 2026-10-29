@@ -1,122 +1,132 @@
 # Diseño interno de módulos — SDD
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
-> **Backend:** Node.js + TypeScript · **Módulo de referencia:** Subastas y Pujas (*Bid Engine*)  
-> **Enfoque arquitectónico:** Clean Architecture (Puertos y Adaptadores)  
-> **Nivel C4:** 4 – Código · **Estándar:** Software Design Description (SDD) · **Versión:** 1.0
+> **Backend:** Go (Golang 1.23+) · **Módulo de referencia:** Subastas y Pujas (*Auction Engine*)  
+> **Enfoque arquitectónico:** Clean Architecture (Puertos y Adaptadores / Arquitectura Hexagonal)  
+> **Nivel C4:** 4 – Código · **Estándar:** Software Design Description (SDD) · **Versión:** 2.0
 
 ---
 
 ## 1. Propósito
 
-Este documento de **Descripción de Diseño de Software (SDD)** especifica formalmente cómo se organiza el código dentro de un módulo del backend de LiveBid. Sus objetivos son:
+Este documento de **Descripción de Diseño de Software (SDD)** especifica formalmente cómo se organiza el código dentro del backend en **Go** para LiveBid. Sus objetivos son:
 
-1. **Estandarización técnica:** Asegurar que todos los módulos del sistema (Usuarios, Catálogo, Subastas, Pagos, Notificaciones) sigan exactamente la misma estructura interna.
-2. **Aislamiento de reglas de negocio:** Garantizar que la lógica central de la subasta (validación de incremento, martillazo, anti-sniping) permanezca completamente aislada de frameworks web, librerías de sockets o motores de base de datos.
-3. **Mantenibilidad y testabilidad:** Permitir que cualquier caso de uso pueda ser probado de forma unitaria en memoria sin levantar servidores ni conexiones reales a bases de datos.
+1. **Estandarización técnica en Go:** Asegurar que todos los paquetes del sistema (Usuarios, Catálogo, Subastas, Pagos, Notificaciones) sigan exactamente el layout estándar idiomático de Go (`cmd/` e `internal/`).
+2. **Aislamiento de reglas de negocio:** Garantizar que la lógica central de la subasta (validación de incremento, martillazo, anti-sniping) permanezca en structs puros en `domain/`, completamente aislada de frameworks web (Gin/Fiber), librerías de sockets o drivers de bases de datos.
+3. **Mantenibilidad y testabilidad con `go test`:** Permitir que cualquier caso de uso pueda ser probado de forma unitaria en memoria mediante mocks de interfaces en microsegundos, sin requerir contenedores ni bases de datos activas.
 
 ---
 
-## 2. Estructura de Carpetas del Módulo
+## 2. Estructura Estándar del Proyecto en Go
 
 ```text
-src/
-└── modules/
-    └── subastas/
-        ├── dominio/
-        │   ├── subasta.ts                       // Entidad raíz (Aggregate Root) y reglas de negocio
-        │   ├── puja.ts                          // Entidad / Value Object de la oferta realizada
-        │   ├── estado-subasta.ts                // Enumeración de estados (State Machine)
-        │   ├── regla-incremento.ts              // Objeto de valor que calcula el incremento mínimo
-        │   ├── subasta-repository.ts            // Puerto (interfaz) para persistencia
-        │   ├── bid-lock-port.ts                 // Puerto para control de concurrencia atómica
-        │   ├── escrow-port.ts                   // Puerto para retención de fondos en custodia
-        │   ├── room-notifier-port.ts            // Puerto para difusión en tiempo real
-        │   └── errores/
-        │       ├── puja-inferior.error.ts       // Error de dominio: oferta no supera el precio líder
-        │       ├── subasta-cerrada.error.ts     // Error de dominio: lote ya adjudicado o cerrado
-        │       └── garantia-insuficiente.error.ts // Error de dominio: postor sin saldo en custodia
-        ├── aplicacion/
-        │   ├── procesar-puja.use-case.ts        // Caso de uso crítico: recepción y validación de puja
-        │   ├── procesar-puja.command.ts         // DTO de entrada tipado para la puja
-        │   ├── procesar-puja.response.ts        // DTO de salida con el nuevo estado del lote
-        │   ├── iniciar-subasta.use-case.ts      // Caso de uso: apertura de sala y cronómetro
-        │   └── martillar-subasta.use-case.ts    // Caso de uso: transición de martillo y cierre
-        ├── infraestructura/
-        │   ├── redis-bid-lock.adapter.ts        // Implementación atómica con Redis Mutex
-        │   ├── postgres-subasta.repo.ts         // Implementación persistente con PostgreSQL
-        │   ├── websocket-room.adapter.ts        // Implementación de difusión mediante Socket.io/WS
-        │   └── niubiz-escrow.adapter.ts         // Implementación de verificación de fondos con Niubiz
-        └── presentacion/
-            ├── websocket-bid.handler.ts         // Receptor de eventos de sockets ('puja:emitir')
-            ├── subastas.controller.ts           // Controlador HTTP para operaciones administrativas
-            ├── subastas.routes.ts               // Mapeo de rutas REST /api/v1/subastas
-            └── dtos/
-                └── emitir-puja.dto.ts           // Validación de payload HTTP/WS con class-validator
+livebid-backend/
+├── cmd/
+│   └── server/
+│       └── main.go                             // Punto de entrada: Inyección de dependencias e inicio de HTTP/WS
+├── internal/
+│   ├── core/                                   // Núcleo del Negocio (Independiente de tecnología externa)
+│   │   ├── domain/
+│   │   │   ├── auction.go                      // Struct Subasta (Aggregate Root) con métodos de negocio
+│   │   │   ├── bid.go                          // Struct Puja (Value Object inmutable)
+│   │   │   ├── auction_state.go                // Constantes y State Machine de la subasta
+│   │   │   ├── increment_rule.go               // Lógica de cálculo de tramos de incremento mínimo
+│   │   │   ├── ports.go                        // Interfaces de salida: SubastaRepository, BidLockPort, EscrowPort, etc.
+│   │   │   └── errors.go                       // Errores de dominio (ErrPujaInferior, ErrSubastaCerrada, etc.)
+│   │   └── services/
+│   │       ├── auction_service.go              // Casos de uso: ProcesarPuja, IniciarSubasta, MartillarSubasta
+│   │       └── escrow_service.go               // Caso de uso: Retención preventiva y liquidación de garantías
+│   └── adapters/                               // Capa de Infraestructura y Presentación (Tecnologías concretas)
+│       ├── handlers/
+│       │   ├── http/
+│       │   │   ├── auction_controller.go       // Endpoints REST /api/v1/subastas
+│       │   │   └── middleware/
+│       │   │       └── auth_jwt.go             // Validación de token JWT y claims de usuario
+│       │   └── websocket/
+│       │       ├── hub.go                      // Gestor de salas y difusión concurrente de mensajes
+│       │       ├── client.go                   // Goroutines readPump y writePump por postor conectado
+│       │       └── bid_handler.go              // Manejador del frame de puja en tiempo real
+│       ├── persistence/
+│       │   ├── postgres/
+│       │   │   ├── auction_repository.go       // Implementación de SubastaRepository con pgxpool
+│       │   │   └── models.go                   // Mapeo relacional de base de datos
+│       │   └── redis/
+│       │       ├── lock_adapter.go             // Implementación de BidLockPort usando SETNX / Redlock
+│       │       └── cache_adapter.go            // Lecturas y escrituras ultrarrápidas de precio en caliente
+│       ├── ai/
+│       │   └── gemini_circuit_breaker.go       // Adaptador de riesgo Gemini con Circuit Breaker en memoria
+│       └── payments/
+│           └── stripe_niubiz_adapter.go        // Adaptador de pasarela bancaria externa
+├── pkg/                                        // Utilidades compartidas reutilizables (logger, config, validator)
+│   ├── logger/
+│   └── config/
+├── go.mod
+└── go.sum
 ```
 
 ---
 
-## 3. Responsabilidad por Capa (Regla de Dependencias)
+## 3. Responsabilidad por Capa (Regla de Dependencias en Go)
 
 ```mermaid
 graph TD
-    subgraph Presentacion["Presentación (Exterior)"]
-        WSHandler["websocket-bid.handler.ts"]
-        RESTCtrl["subastas.controller.ts"]
+    subgraph Presentacion["Presentación (Exterior / Handlers)"]
+        WSHandler["websocket/bid_handler.go"]
+        RESTCtrl["http/auction_controller.go"]
     end
 
-    subgraph Aplicacion["Aplicación (Casos de Uso)"]
-        UseCase["procesar-puja.use-case.ts"]
+    subgraph Aplicacion["Aplicación (Casos de Uso / Services)"]
+        AuctionService["services/auction_service.go"]
     end
 
     subgraph Dominio["Dominio (Núcleo Invariable)"]
-        Entity["subasta.ts (Aggregate)"]
-        Ports["Interfaces: ISubastaRepo, IBidLockPort, IRoomNotifier"]
+        AuctionEntity["domain/auction.go (Struct Subasta)"]
+        Ports["domain/ports.go (Interfaces Go)"]
     end
 
-    subgraph Infraestructura["Infraestructura (Adaptadores)"]
-        RedisLock["redis-bid-lock.adapter.ts"]
-        PGRepo["postgres-subasta.repo.ts"]
-        WSNotifier["websocket-room.adapter.ts"]
+    subgraph Infraestructura["Infraestructura (Adaptadores Concretos)"]
+        RedisLock["redis/lock_adapter.go"]
+        PGRepo["postgres/auction_repository.go"]
+        WSHub["websocket/hub.go"]
     end
 
-    WSHandler -->|Ejecuta| UseCase
-    RESTCtrl -->|Ejecuta| UseCase
-    UseCase -->|Manipula| Entity
-    UseCase -->|Invoca| Ports
-    RedisLock -.->|Implementa| Ports
-    PGRepo -.->|Implementa| Ports
-    WSNotifier -.->|Implementa| Ports
+    WSHandler -->|Invoca| AuctionService
+    RESTCtrl -->|Invoca| AuctionService
+    AuctionService -->|Ejecuta lógica| AuctionEntity
+    AuctionService -->|Depende de interfaces| Ports
+    RedisLock -.->|Satisface interfaz| Ports
+    PGRepo -.->|Satisface interfaz| Ports
+    WSHub -.->|Satisface interfaz| Ports
 ```
 
-- **Regla de oro:** Las flechas de código siempre apuntan **hacia adentro**. El `dominio` no importa nada de `aplicacion`, `infraestructura` ni `presentacion`.
-- **Inversión de Dependencias (DIP):** El caso de uso (`aplicacion`) solo conoce interfaces del `dominio`. Las clases de `infraestructura` implementan dichas interfaces y se inyectan en tiempo de ejecución.
+- **Inversión de Dependencias Idiomática en Go:** En Go, los paquetes no necesitan declarar explícitamente `implements Interface`. Si un struct en `redis/lock_adapter.go` implementa el método `AdquirirLock(ctx, id, ttl)`, Go lo reconoce automáticamente como un `BidLockPort`. Esto garantiza **cero acoplamiento**.
+- **El paquete `domain` jamás importa nada de `adapters` ni `services`**: Esto previene ciclos de importación (`import cycle not allowed`), una de las mayores fortalezas de Go para forzar una arquitectura limpia.
 
 ---
 
 ## 4. Flujo de Ejecución del Caso de Uso Crítico: `ProcesarPuja`
 
-1. **Recepción en Presentación:** El cliente emite por WebSocket `{ subastaId: "SUB-101", monto: 5500, postorId: "USR-88" }`. El `websocket-bid.handler` valida el formato sintáctico y el token JWT de la sesión.
-2. **Invocación del Caso de Uso:** Se construye el comando `ProcesarPujaCommand` y se delega al `ProcesarPujaUseCase.ejecutar(cmd)`.
-3. **Validación de Garantía (Escrow):** Se consulta al puerto `IEscrowPort.validarGarantiaActiva(cmd.postorId, cmd.subastaId)`. Si no cumple, lanza `GarantiaInsuficienteError`.
-4. **Adquisición de Lock Atómico:** Se invoca `IBidLockPort.adquirirLock(cmd.subastaId)` en Redis para evitar condiciones de carrera (Race Condition).
-5. **Evaluación de Reglas en Dominio:** 
+1. **Recepción en WebSocket Handler:** La Goroutine de lectura del cliente (`readPump`) recibe el frame JSON: `{"action": "bid", "subasta_id": "SUB-101", "monto": 55000}`.
+2. **Contexto con Timeout:** Se inicializa un contexto con cancelación preventiva: `ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)`.
+3. **Invocación del Servicio:** Se invoca `auctionService.ProcesarPuja(ctx, cmd)`.
+4. **Adquisición del Lock Atómico:** El servicio solicita el lock en Redis mediante `r.lockPort.AdquirirLock(ctx, cmd.SubastaID, 1500*time.Millisecond)` evitando que dos Goroutines modifiquen la misma subasta simultáneamente.
+5. **Evaluación de Reglas en la Entidad:**
    - La entidad `Subasta` valida que su estado sea `ACTIVA` o `EN_CONTEO`.
-   - Comprueba que `monto >= precioActual + incrementoMinimo`.
-   - Si la puja entra en los últimos 15 segundos, extiende el cronómetro 30 segundos más (*Anti-Sniping*).
-   - Genera la entidad inmutable `Puja` con timestamp del servidor.
-6. **Persistencia y Liberación de Lock:** Se persiste el nuevo estado mediante `ISubastaRepository.guardar(subasta)` y se libera el lock atómico en Redis.
-7. **Notificación en Tiempo Real:** Se invoca `IRoomNotifierPort.difundirNuevaPuja(nuevaPuja)` notificando a todos los postores en $< 50$ ms.
+   - Verifica: `monto >= subasta.PrecioActual + subasta.CalcularIncrementoMinimo()`.
+   - **Anti-Sniping:** Si `subasta.EsUltimosSegundos(time.Now(), 15*time.Second)`, extiende el cierre `+30*time.Second`.
+   - Genera el struct `Puja` inmutable.
+6. **Actualización de Caché y Liberación de Lock:** Se actualiza el precio líder en Redis y se ejecuta inmediatamente la función diferida `unlock()`.
+7. **Difusión por Canal de Go (`chan`):** Se envía el evento de actualización al canal del `Hub`, que lo replica a todos los postores en $< 20$ ms.
+8. **Persistencia Desacoplada:** Se envía el evento a una cola o worker en segundo plano para ser persistido en PostgreSQL sin ralentizar la respuesta del WebSocket.
 
 ---
 
-## 5. Matriz de Errores de Dominio y Mapeo de Respuesta
+## 5. Matriz de Errores de Dominio y Mapeo en Go
 
-| Error de Dominio | Causa en el Negocio | Código HTTP | Evento WebSocket Retornado |
+| Error de Dominio en Go (`var Err... = errors.New(...)`) | Causa en el Negocio | Código HTTP | Mensaje WebSocket Emitido |
 |---|---|---|---|
-| `PujaInferiorError` | La oferta no supera el precio líder más el incremento mínimo | 409 Conflict | `puja:rechazada { motivo: "MONTO_INSUFICIENTE" }` |
-| `SubastaCerradaError` | El martillo final ya cayó o la subasta no ha iniciado | 400 Bad Request | `puja:rechazada { motivo: "SUBASTA_FINALIZADA" }` |
-| `GarantiaInsuficienteError` | El postor no tiene saldo en custodia congelado | 403 Forbidden | `puja:rechazada { motivo: "GARANTIA_REQUERIDA" }` |
-| `LockTimeoutError` | Demasiada contención concurrente temporal en Redis | 503 Service Unavailable | `puja:reintentar { motivo: "COLISION_CONCURRENTE" }` |
-
+| `domain.ErrPujaInferior` | La oferta no supera el precio líder más el incremento | `http.StatusConflict` (409) | `{"event":"bid_rejected", "reason":"MONTO_INSUFICIENTE"}` |
+| `domain.ErrSubastaCerrada` | El martillo final ya cayó o la subasta no está activa | `http.StatusBadRequest` (400) | `{"event":"bid_rejected", "reason":"SUBASTA_FINALIZADA"}` |
+| `domain.ErrGarantiaInsuficiente` | El postor no tiene saldo en custodia congelado | `http.StatusForbidden` (403) | `{"event":"bid_rejected", "reason":"GARANTIA_REQUERIDA"}` |
+| `domain.ErrLockTimeout` | Demasiada contención concurrente en Redis | `http.StatusServiceUnavailable` (503) | `{"event":"bid_retry", "reason":"COLISION_CONCURRENTE"}` |
+| `domain.ErrRiesgoAltoIA` | El agente de IA detectó comportamiento fraudulento | `http.StatusForbidden` (403) | `{"event":"bid_rejected", "reason":"BLOQUEADO_POR_SEGURIDAD"}` |
