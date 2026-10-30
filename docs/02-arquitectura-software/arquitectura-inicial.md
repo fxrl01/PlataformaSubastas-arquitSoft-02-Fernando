@@ -22,52 +22,52 @@ flowchart TD
     %% =========================
     %% CLIENTES Y DISPOSITIVOS
     %% =========================
-    subgraph CLIENTS["🌐 CLIENTES Y DISPOSITIVOS VIP"]
-        Bidder["👤 Postor VIP / Inversionista<br><i>(Next.js App / Mobile Browser)</i>"]
-        Auctioneer["👤 Martillero Oficial<br><i>(Dashboard de Control en Vivo)</i>"]
+    subgraph CLIENTS[" CLIENTES Y DISPOSITIVOS VIP"]
+        Bidder[" Postor VIP / Inversionista<br><i>(Next.js App / Mobile Browser)</i>"]
+        Auctioneer[" Martillero Oficial<br><i>(Dashboard de Control en Vivo)</i>"]
     end
 
     %% =========================
     %% PERÍMETRO Y EDGE (AWS)
     %% =========================
-    subgraph EDGE_LAYER["🛡️ EDGE, INGRESS & CDN (AWS CloudFront)"]
+    subgraph EDGE_LAYER[" EDGE, INGRESS & CDN (AWS CloudFront)"]
         WAF["AWS WAF + SSL Termination<br><i>(Protección DDoS y Rate Limiting)</i>"]
-        NextSSR["⚡ Frontend Tier: Next.js 15 (React 19)<br><i>(Catálogo con SSR / SEO + Audio FX)</i>"]
+        NextSSR[" Frontend Tier: Next.js 15 (React 19)<br><i>(Catálogo con SSR / SEO + Audio FX)</i>"]
     end
 
     %% =========================
     %% HOT PATH (TIEMPO REAL < 25ms)
     %% =========================
-    subgraph HOT_PATH["🔥 HOT PATH — CAMINO CALIENTE (En Memoria & Tiempo Real)"]
-        WSHub["⚡ Realtime Gateway & WebSocket Hub (Go)<br><i>(10,000+ sockets concurrentes vía Goroutines)</i>"]
-        Engine["🔨 Auction & Concurrency Engine (Go)<br><i>(Clean Architecture: Anti-Sniping + Tramos)</i>"]
-        RedisCluster[("🧠 Redis 7.2 In-Memory Data Store<br>• Mutex Atómico SETNX (Zero Race Conditions)<br>• Precio Líder en Memoria (< 1ms)<br>• Canales Pub/Sub de Difusión Multihilo")]
+    subgraph HOT_PATH["HOT PATH — CAMINO CALIENTE (En Memoria & Tiempo Real)"]
+        WSHub["Realtime Gateway & WebSocket Hub (Go)<br><i>(10,000+ sockets concurrentes vía Goroutines)</i>"]
+        Engine["Auction & Concurrency Engine (Go)<br><i>(Clean Architecture: Anti-Sniping + Tramos)</i>"]
+        RedisCluster[("Redis 7.2 In-Memory Data Store<br>• Mutex Atómico SETNX (Zero Race Conditions)<br>• Precio Líder en Memoria (< 1ms)<br>• Canales Pub/Sub de Difusión Multihilo")]
     end
 
     %% =========================
     %% INTELLIGENCE & TRUST TIER
     %% =========================
-    subgraph AI_TRUST["🤖 INTELLIGENCE & ZERO-TRUST LAYER"]
-        CircuitBreaker["🛡️ Circuit Breaker en Memoria (Go)<br><i>(Degradación elegante si timeout > 150ms)</i>"]
-        GeminiAI["🧠 Google Gemini AI Engine<br><i>(Detección predictiva de fraude y scoring)</i>"]
+    subgraph AI_TRUST["INTELLIGENCE & ZERO-TRUST LAYER"]
+        CircuitBreaker["Circuit Breaker en Memoria (Go)<br><i>(Degradación elegante si timeout > 150ms)</i>"]
+        GeminiAI["Google Gemini AI Engine<br><i>(Detección predictiva de fraude y scoring)</i>"]
     end
 
     %% =========================
     %% COLD PATH (DURABILIDAD Y AUDITORÍA)
     %% =========================
-    subgraph COLD_PATH["❄️ COLD PATH — CAMINO FRÍO (Persistencia y Liquidación Asíncrona)"]
+    subgraph COLD_PATH["COLD PATH — CAMINO FRÍO (Persistencia y Liquidación Asíncrona)"]
         Broker["📨 Message Broker (RabbitMQ / SQS)<br><i>(Cola de eventos: PujaAceptada, SubastaCerrada)</i>"]
-        AsyncWorker["⚙️ Background Persistence Worker (Go)"]
-        PostgresDB[("🗄️ PostgreSQL 16 (AWS RDS Free Tier)<br>• Catálogo oficial de bienes y peritajes<br>• Registro transaccional inmutable (ACID)<br>• Trazabilidad legal y actas de remate")]
+        AsyncWorker["Background Persistence Worker (Go)"]
+        PostgresDB[("PostgreSQL 16 (AWS RDS Free Tier)<br>• Catálogo oficial de bienes y peritajes<br>• Registro transaccional inmutable (ACID)<br>• Trazabilidad legal y actas de remate")]
     end
 
     %% =========================
     %% INTEGRACIONES EXTERNAS
     %% =========================
-    subgraph EXTERNAL["🏛️ SERVICIOS EXTERNOS & LIQUIDACIÓN"]
+    subgraph EXTERNAL["SERVICIOS EXTERNOS & LIQUIDACIÓN"]
         PaymentEscrow["💳 Pasarela de Pagos / Escrow<br><i>(Stripe / Niubiz: Retención de Garantías)</i>"]
-        VideoCDN["📹 Video Streaming CDN<br><i>(Cloudflare Stream / AWS IVS)</i>"]
-        Notif["📲 Alertas & Mensajería<br><i>(AWS SES / WhatsApp Twilio)</i>"]
+        VideoCDN["Video Streaming CDN<br><i>(Cloudflare Stream / AWS IVS)</i>"]
+        Notif["Alertas & Mensajería<br><i>(AWS SES / WhatsApp Twilio)</i>"]
     end
 
     %% CONEXIONES Y FLUJOS
