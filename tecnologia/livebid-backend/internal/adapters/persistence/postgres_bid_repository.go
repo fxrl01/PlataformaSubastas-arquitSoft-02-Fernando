@@ -78,14 +78,17 @@ func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subast
 	return nil
 }
 
-func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID string) ([]domain.Puja, error) {
+func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID, bidderID string, minimumAmount float64, limit, offset int) ([]domain.Puja, int, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, subasta_id, postor_id, monto::text, timestamp_oficial
 		FROM pujas
 		WHERE subasta_id = $1
-		ORDER BY correlativo ASC`, subastaID)
+		  AND ($2 = '' OR postor_id = $2)
+		  AND ($3 = 0 OR monto >= $3)
+		ORDER BY correlativo ASC
+		LIMIT $4 OFFSET $5`, subastaID, bidderID, minimumAmount, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list auction bids: %w", err)
+		return nil, 0, fmt.Errorf("list auction bids: %w", err)
 	}
 	defer rows.Close()
 
@@ -94,16 +97,26 @@ func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID 
 		var bid domain.Puja
 		var amount string
 		if err := rows.Scan(&bid.ID, &bid.SubastaID, &bid.PostorID, &amount, &bid.Timestamp); err != nil {
-			return nil, fmt.Errorf("scan auction bid: %w", err)
+			return nil, 0, fmt.Errorf("scan auction bid: %w", err)
 		}
 		bid.Monto, err = strconv.ParseFloat(amount, 64)
 		if err != nil {
-			return nil, fmt.Errorf("parse bid amount: %w", err)
+			return nil, 0, fmt.Errorf("parse bid amount: %w", err)
 		}
 		bids = append(bids, bid)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate auction bids: %w", err)
+		return nil, 0, fmt.Errorf("iterate auction bids: %w", err)
 	}
-	return bids, nil
+	var total int
+	if err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM pujas
+		WHERE subasta_id = $1
+		  AND ($2 = '' OR postor_id = $2)
+		  AND ($3 = 0 OR monto >= $3)`,
+		subastaID, bidderID, minimumAmount).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count auction bids: %w", err)
+	}
+	return bids, total, nil
 }
