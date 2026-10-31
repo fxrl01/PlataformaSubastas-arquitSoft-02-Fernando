@@ -22,8 +22,8 @@ func NewPostgresAuctionRepository(pool *pgxpool.Pool) *PostgresAuctionRepository
 
 func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string) (*domain.Subasta, error) {
 	const query = `
-		SELECT id, vendedor_id, titulo, descripcion, precio_base, precio_actual,
-			postor_lider_id, estado, inicio_programado, fin_programado, created_at
+		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
+			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
 		FROM subastas WHERE id = $1`
 	subasta, err := scanAuction(r.pool.QueryRow(ctx, query, id))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -37,8 +37,8 @@ func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string)
 
 func (r *PostgresAuctionRepository) Listar(ctx context.Context) ([]*domain.Subasta, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, vendedor_id, titulo, descripcion, precio_base, precio_actual,
-			postor_lider_id, estado, inicio_programado, fin_programado, created_at
+		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
+			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
 		FROM subastas ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list auctions: %w", err)
@@ -90,12 +90,12 @@ type auctionScanner interface {
 func scanAuction(row auctionScanner) (*domain.Subasta, error) {
 	var subasta domain.Subasta
 	var vendedorID, liderID, descripcion *string
-	var precioBase, precioActual string
+	var precioBase, incrementoMinimo, precioActual string
 	var createdAt time.Time
 	err := row.Scan(
-		&subasta.ID, &vendedorID, &subasta.Titulo, &descripcion,
-		&precioBase, &precioActual, &liderID, &subasta.Estado,
-		&subasta.FechaInicio, &subasta.FechaCierre, &createdAt,
+		&subasta.ID, &subasta.Titulo, &descripcion, &precioBase, &incrementoMinimo,
+		&precioActual, &liderID, &subasta.Estado, &subasta.FechaCierre, &createdAt,
+		&subasta.FechaInicio, &vendedorID,
 	)
 	if err != nil {
 		return nil, err
@@ -112,6 +112,9 @@ func scanAuction(row auctionScanner) (*domain.Subasta, error) {
 	subasta.PrecioBase, err = strconv.ParseFloat(precioBase, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse base price: %w", err)
+	}
+	if _, err := strconv.ParseFloat(incrementoMinimo, 64); err != nil {
+		return nil, fmt.Errorf("parse minimum increment: %w", err)
 	}
 	subasta.PrecioActual, err = strconv.ParseFloat(precioActual, 64)
 	if err != nil {
