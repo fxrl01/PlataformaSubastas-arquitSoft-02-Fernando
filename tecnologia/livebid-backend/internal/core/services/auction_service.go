@@ -38,8 +38,9 @@ type AuctionService struct {
 }
 
 type AuctionCatalogService struct {
-	repo domain.SubastaRepository
-	now  func() time.Time
+	repo       domain.SubastaRepository
+	guarantees domain.GuaranteeRepository
+	now        func() time.Time
 }
 
 type CrearSubastaCmd struct {
@@ -54,6 +55,10 @@ type CrearSubastaCmd struct {
 
 func NuevoAuctionCatalogService(repo domain.SubastaRepository) *AuctionCatalogService {
 	return &AuctionCatalogService{repo: repo, now: time.Now}
+}
+
+func NuevoAuctionCatalogServiceConGarantias(repo domain.SubastaRepository, guarantees domain.GuaranteeRepository) *AuctionCatalogService {
+	return &AuctionCatalogService{repo: repo, guarantees: guarantees, now: time.Now}
 }
 
 func (s *AuctionCatalogService) Crear(ctx context.Context, cmd CrearSubastaCmd) (*domain.Subasta, error) {
@@ -99,7 +104,15 @@ func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {
 	if err := subasta.Cerrar(); err != nil {
 		return err
 	}
-	return s.repo.Guardar(ctx, subasta)
+	if err := s.repo.Guardar(ctx, subasta); err != nil {
+		return err
+	}
+	if s.guarantees != nil {
+		if err := s.guarantees.SettleAuction(ctx, subasta.ID, subasta.PostorLiderID); err != nil {
+			return fmt.Errorf("settle auction guarantees: %w", err)
+		}
+	}
+	return nil
 }
 
 // NuevoAuctionService crea una nueva instancia de AuctionService inyectando sus dependencias.

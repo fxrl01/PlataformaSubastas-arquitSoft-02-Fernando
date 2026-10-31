@@ -51,3 +51,33 @@ func (r *PostgresGuaranteeRepository) Save(ctx context.Context, g *domain.Guaran
 	}
 	return nil
 }
+
+func (r *PostgresGuaranteeRepository) SettleAuction(ctx context.Context, auctionID, winnerID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin settle guarantees: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if winnerID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE garantias
+			SET estado = 'CAPTURADA_COBRO'
+			WHERE subasta_id = $1 AND postor_id = $2 AND estado = 'RETENIDA'`,
+			auctionID, winnerID); err != nil {
+			return fmt.Errorf("capture winning guarantee: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE garantias
+		SET estado = 'LIBERADA'
+		WHERE subasta_id = $1 AND estado = 'RETENIDA'
+		  AND ($2 = '' OR postor_id <> $2)`,
+		auctionID, winnerID); err != nil {
+		return fmt.Errorf("release losing guarantees: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit settled guarantees: %w", err)
+	}
+	return nil
+}
