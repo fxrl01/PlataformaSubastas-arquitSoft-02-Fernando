@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS garantias (
 );
 
 CREATE INDEX IF NOT EXISTS idx_garantias_subasta_postor ON garantias(subasta_id, postor_id, estado);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_garantia_retenida_subasta_postor
+    ON garantias(subasta_id, postor_id) WHERE estado = 'RETENIDA';
 
 -- 4. Tabla de Historial Inmutable de Pujas
 CREATE TABLE IF NOT EXISTS pujas (

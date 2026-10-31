@@ -136,6 +136,7 @@ func main() {
 	userRepository := persistence.NewPostgresUserRepository(pool)
 	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
 	bidRepository := persistence.NewPostgresBidRepository(pool)
+	guaranteeRepository := persistence.NewPostgresGuaranteeRepository(pool)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
@@ -151,8 +152,9 @@ func main() {
 	)
 	authHandler := handlers.NewAuthHandler(authService)
 	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogService(auctionRepository))
-	bidService := services.NewAuctionBidServiceWithNotifier(auctionRepository, bidRepository, bidLock, bidNotifier)
+	bidService := services.NewAuctionBidServiceWithNotifierAndGuarantee(auctionRepository, bidRepository, bidLock, bidNotifier, guaranteeRepository)
 	bidHandler := handlers.NewBidHandler(bidService)
+	guaranteeHandler := handlers.NewGuaranteeHandler(services.NewGuaranteeService(auctionRepository, guaranteeRepository))
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
 	// 4. Router HTTP estándar de Go
@@ -185,6 +187,9 @@ func main() {
 	mux.Handle("POST /api/v1/subastas/{id}/pujas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(bidHandler.Place))))
+	mux.Handle("POST /api/v1/subastas/{id}/garantias",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(guaranteeHandler.Create))))
 	mux.Handle("GET /ws/subastas/{id}", webSocketHandler)
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
