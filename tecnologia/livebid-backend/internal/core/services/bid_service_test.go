@@ -11,6 +11,7 @@ import (
 
 type mockBidRepository struct {
 	registered []domain.Puja
+	idempotent map[string]domain.Puja
 }
 
 type mockBidLock struct {
@@ -28,8 +29,22 @@ func (l *mockBidLock) AdquirirLock(_ context.Context, _ string, _ time.Duration)
 	}, nil
 }
 
-func (r *mockBidRepository) RegistrarPujaAtomica(_ context.Context, _ string, puja domain.Puja, _ float64, _ time.Time, _ bool) error {
+func (r *mockBidRepository) BuscarPorIdempotencyKey(_ context.Context, _, _, key string) (*domain.Puja, error) {
+	bid, ok := r.idempotent[key]
+	if !ok {
+		return nil, nil
+	}
+	return &bid, nil
+}
+
+func (r *mockBidRepository) RegistrarPujaAtomica(_ context.Context, _ string, puja domain.Puja, _ float64, _ time.Time, _ bool, key string) error {
 	r.registered = append(r.registered, puja)
+	if key != "" {
+		if r.idempotent == nil {
+			r.idempotent = make(map[string]domain.Puja)
+		}
+		r.idempotent[key] = puja
+	}
 	return nil
 }
 
@@ -110,5 +125,46 @@ func TestPlaceBidRejectsWhenAuctionLockIsUnavailable(t *testing.T) {
 	})
 	if err != domain.ErrLockTimeout {
 		t.Fatalf("expected lock timeout, got %v", err)
+	}
+}
+
+func TestPlaceBidReplaysIdempotentRequest(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-1", "Laptop", "", 2500, now, now.Add(time.Hour))
+	_ = auction.Activar()
+	bidRepo := &mockBidRepository{}
+	service := services.NewAuctionBidService(&MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}}, bidRepo)
+	cmd := services.PlaceBidCmd{SubastaID: "sub-1", PostorID: "usr-bidder", Monto: 3000, IdempotencyKey: "request-1"}
+
+	first, err := service.PlaceBid(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("first bid failed: %v", err)
+	}
+	second, err := service.PlaceBid(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("replayed bid failed: %v", err)
+	}
+	if first.PujaID != second.PujaID || len(bidRepo.registered) != 1 {
+		t.Fatalf("request was not replayed: first=%+v second=%+v bids=%d", first, second, len(bidRepo.registered))
+	}
+}
+
+func TestPlaceBidRejectsIdempotencyKeyWithDifferentAmount(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-1", "Laptop", "", 2500, now, now.Add(time.Hour))
+	_ = auction.Activar()
+	bidRepo := &mockBidRepository{}
+	service := services.NewAuctionBidService(&MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}}, bidRepo)
+	_, err := service.PlaceBid(context.Background(), services.PlaceBidCmd{
+		SubastaID: "sub-1", PostorID: "usr-bidder", Monto: 3000, IdempotencyKey: "request-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.PlaceBid(context.Background(), services.PlaceBidCmd{
+		SubastaID: "sub-1", PostorID: "usr-bidder", Monto: 3500, IdempotencyKey: "request-1",
+	})
+	if err != domain.ErrIdempotencyKeyConflict {
+		t.Fatalf("expected idempotency conflict, got %v", err)
 	}
 }

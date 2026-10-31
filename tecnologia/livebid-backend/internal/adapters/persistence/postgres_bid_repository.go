@@ -20,7 +20,30 @@ func NewPostgresBidRepository(pool *pgxpool.Pool) *PostgresBidRepository {
 	return &PostgresBidRepository{pool: pool}
 }
 
-func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subastaID string, puja domain.Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool) error {
+func (r *PostgresBidRepository) BuscarPorIdempotencyKey(ctx context.Context, subastaID, bidderID, key string) (*domain.Puja, error) {
+	var bid domain.Puja
+	var amount string
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, subasta_id, postor_id, monto::text, timestamp_oficial
+		FROM pujas
+		WHERE subasta_id = $1 AND postor_id = $2 AND idempotency_key = $3`,
+		subastaID, bidderID, key).Scan(
+		&bid.ID, &bid.SubastaID, &bid.PostorID, &amount, &bid.Timestamp,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find bid by idempotency key: %w", err)
+	}
+	bid.Monto, err = strconv.ParseFloat(amount, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse idempotent bid amount: %w", err)
+	}
+	return &bid, nil
+}
+
+func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subastaID string, puja domain.Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool, idempotencyKey string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin bid transaction: %w", err)
@@ -66,9 +89,9 @@ func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subast
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO pujas
-			(id, subasta_id, postor_id, monto, correlativo, timestamp_oficial, anti_sniping_disparado)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		puja.ID, subastaID, puja.PostorID, puja.Monto, correlativo, puja.Timestamp, tiempoExtendido)
+			(id, subasta_id, postor_id, monto, correlativo, timestamp_oficial, anti_sniping_disparado, idempotency_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`,
+		puja.ID, subastaID, puja.PostorID, puja.Monto, correlativo, puja.Timestamp, tiempoExtendido, idempotencyKey)
 	if err != nil {
 		return fmt.Errorf("insert bid: %w", err)
 	}

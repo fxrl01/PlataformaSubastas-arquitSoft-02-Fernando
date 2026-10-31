@@ -29,7 +29,8 @@ var (
 	ErrPostorIgual = errors.New("domain: el postor líder actual no puede pujar contra sí mismo")
 
 	// ErrSubastaNoEncontrada se produce cuando la subasta solicitada no existe en el repositorio.
-	ErrSubastaNoEncontrada = errors.New("domain: la subasta solicitada no fue encontrada")
-	ErrSubastaInvalida     = errors.New("domain: datos de subasta inválidos")
-	ErrPujaConcurrente     = errors.New("domain: la subasta cambió mientras se registraba la puja")
+	ErrSubastaNoEncontrada    = errors.New("domain: la subasta solicitada no fue encontrada")
+	ErrSubastaInvalida        = errors.New("domain: datos de subasta inválidos")
+	ErrPujaConcurrente        = errors.New("domain: la subasta cambió mientras se registraba la puja")
+	ErrIdempotencyKeyConflict = errors.New("domain: la clave de idempotencia ya fue usada con otro monto")
 )
