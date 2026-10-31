@@ -42,6 +42,8 @@ func (h *BidHandler) Place(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "bid rejected"})
 		case errors.Is(err, domain.ErrPujaConcurrente):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "auction changed, retry bid"})
+		case errors.Is(err, domain.ErrLockTimeout):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "auction busy, retry bid"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}

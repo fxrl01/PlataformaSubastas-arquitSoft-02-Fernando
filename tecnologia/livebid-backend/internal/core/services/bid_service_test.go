@@ -13,6 +13,21 @@ type mockBidRepository struct {
 	registered []domain.Puja
 }
 
+type mockBidLock struct {
+	locked bool
+}
+
+func (l *mockBidLock) AdquirirLock(_ context.Context, _ string, _ time.Duration) (domain.UnlockFunc, error) {
+	if l.locked {
+		return nil, domain.ErrLockTimeout
+	}
+	l.locked = true
+	return func() error {
+		l.locked = false
+		return nil
+	}, nil
+}
+
 func (r *mockBidRepository) RegistrarPujaAtomica(_ context.Context, _ string, puja domain.Puja, _ float64, _ time.Time, _ bool) error {
 	r.registered = append(r.registered, puja)
 	return nil
@@ -59,5 +74,23 @@ func TestPlaceBidRejectsInsufficientAmount(t *testing.T) {
 	}
 	if len(bidRepo.registered) != 0 {
 		t.Fatal("rejected bid was persisted")
+	}
+}
+
+func TestPlaceBidRejectsWhenAuctionLockIsUnavailable(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-1", "Laptop", "", 2500, now, now.Add(time.Hour))
+	_ = auction.Activar()
+	lock := &mockBidLock{locked: true}
+	service := services.NewAuctionBidService(
+		&MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}},
+		&mockBidRepository{}, lock,
+	)
+
+	_, err := service.PlaceBid(context.Background(), services.PlaceBidCmd{
+		SubastaID: "sub-1", PostorID: "usr-bidder", Monto: 3000,
+	})
+	if err != domain.ErrLockTimeout {
+		t.Fatalf("expected lock timeout, got %v", err)
 	}
 }

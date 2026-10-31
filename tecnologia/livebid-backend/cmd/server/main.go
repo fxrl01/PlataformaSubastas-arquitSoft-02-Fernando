@@ -16,6 +16,7 @@ import (
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 // InMemorySubastaRepo es una implementación ligera en memoria para desarrollo local.
@@ -134,6 +135,12 @@ func main() {
 	userRepository := persistence.NewPostgresUserRepository(pool)
 	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
 	bidRepository := persistence.NewPostgresBidRepository(pool)
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
+	defer redisClient.Close()
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("ping redis: %v", err)
+	}
+	bidLock := persistence.NewRedisBidLock(redisClient)
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
@@ -142,7 +149,7 @@ func main() {
 	)
 	authHandler := handlers.NewAuthHandler(authService)
 	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogService(auctionRepository))
-	bidHandler := handlers.NewBidHandler(services.NewAuctionBidService(auctionRepository, bidRepository))
+	bidHandler := handlers.NewBidHandler(services.NewAuctionBidService(auctionRepository, bidRepository, bidLock))
 
 	// 4. Router HTTP estándar de Go
 	mux := http.NewServeMux()
@@ -217,4 +224,15 @@ func main() {
 	}
 
 	log.Println(" Servidor LiveBid cerrado exitosamente.")
+}
+
+func redisAddr(rawURL string) string {
+	if rawURL == "" {
+		return "localhost:6379"
+	}
+	const prefix = "redis://"
+	if len(rawURL) >= len(prefix) && rawURL[:len(prefix)] == prefix {
+		return rawURL[len(prefix):]
+	}
+	return rawURL
 }

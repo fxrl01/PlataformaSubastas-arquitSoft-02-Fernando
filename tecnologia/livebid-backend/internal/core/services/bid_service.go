@@ -12,6 +12,7 @@ import (
 type AuctionBidService struct {
 	auctions domain.SubastaRepository
 	bids     domain.BidRepository
+	lock     domain.BidLockPort
 	now      func() time.Time
 }
 
@@ -31,11 +32,24 @@ type BidResponse struct {
 	Estado          domain.EstadoSubasta `json:"estado"`
 }
 
-func NewAuctionBidService(auctions domain.SubastaRepository, bids domain.BidRepository) *AuctionBidService {
-	return &AuctionBidService{auctions: auctions, bids: bids, now: time.Now}
+func NewAuctionBidService(auctions domain.SubastaRepository, bids domain.BidRepository, locks ...domain.BidLockPort) *AuctionBidService {
+	var lock domain.BidLockPort
+	if len(locks) > 0 {
+		lock = locks[0]
+	}
+	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, now: time.Now}
 }
 
 func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidResponse, error) {
+	var unlock domain.UnlockFunc
+	var err error
+	if s.lock != nil {
+		unlock, err = s.lock.AdquirirLock(ctx, cmd.SubastaID, 1500*time.Millisecond)
+		if err != nil {
+			return BidResponse{}, domain.ErrLockTimeout
+		}
+		defer func() { _ = unlock() }()
+	}
 	subasta, err := s.auctions.ObtenerPorID(ctx, cmd.SubastaID)
 	if err != nil {
 		return BidResponse{}, err
