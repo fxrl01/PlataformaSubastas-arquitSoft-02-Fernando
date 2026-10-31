@@ -133,6 +133,7 @@ func main() {
 	}
 	userRepository := persistence.NewPostgresUserRepository(pool)
 	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
+	bidRepository := persistence.NewPostgresBidRepository(pool)
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
@@ -141,6 +142,7 @@ func main() {
 	)
 	authHandler := handlers.NewAuthHandler(authService)
 	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogService(auctionRepository))
+	bidHandler := handlers.NewBidHandler(services.NewAuctionBidService(auctionRepository, bidRepository))
 
 	// 4. Router HTTP estándar de Go
 	mux := http.NewServeMux()
@@ -169,6 +171,9 @@ func main() {
 	mux.Handle("PATCH /api/v1/subastas/{id}/close",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Close))))
+	mux.Handle("POST /api/v1/subastas/{id}/pujas",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(bidHandler.Place))))
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

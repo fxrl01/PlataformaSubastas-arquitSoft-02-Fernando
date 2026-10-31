@@ -41,6 +41,10 @@ type SubastaRepository interface {
 	Listar(ctx context.Context) ([]*Subasta, error)
 }
 
+type BidRepository interface {
+	RegistrarPujaAtomica(ctx context.Context, subastaID string, puja Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool) error
+}
+
 // BidLockPort define el puerto para adquirir bloqueos atómicos distribuidos (ej. Redis SETNX).
 type BidLockPort interface {
 	AdquirirLock(ctx context.Context, subastaID string, ttl time.Duration) (UnlockFunc, error)
