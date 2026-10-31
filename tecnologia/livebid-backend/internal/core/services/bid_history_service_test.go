@@ -19,11 +19,24 @@ func TestBidHistoryListsBidsInRepositoryOrder(t *testing.T) {
 	}}
 	service := services.NewBidHistoryService(repo, bids)
 
-	result, err := service.List(context.Background(), "sub-1")
+	result, err := service.ListPage(context.Background(), "sub-1", services.BidHistoryQuery{
+		Page: 1, PerPage: 1, MinimumAmount: 100,
+	})
 	if err != nil {
 		t.Fatalf("list bids failed: %v", err)
 	}
-	if len(result) != 2 || result[0].ID != "bid-1" || result[1].Sequence != 2 {
+	if result.Total != 2 || len(result.Items) != 1 || result.Items[0].ID != "bid-1" ||
+		result.TotalPages != 2 {
 		t.Fatalf("unexpected bid history: %+v", result)
+	}
+}
+
+func TestBidHistoryRejectsInvalidPageSize(t *testing.T) {
+	service := services.NewBidHistoryService(&MockRepo{}, &mockBidRepository{})
+	_, err := service.ListPage(context.Background(), "sub-1", services.BidHistoryQuery{
+		Page: 1, PerPage: 101,
+	})
+	if err != services.ErrInvalidBidHistoryQuery {
+		t.Fatalf("expected invalid query error, got %v", err)
 	}
 }

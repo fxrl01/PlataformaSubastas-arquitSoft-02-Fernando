@@ -5,3 +5,4 @@
 3. Crear el caso de uso y el handler HTTP.
 4. Registrar la ruta pública de consulta.
 5. Validar pruebas y compilación.
+6. Incorporar paginación y filtros sin permitir consultas ilimitadas.

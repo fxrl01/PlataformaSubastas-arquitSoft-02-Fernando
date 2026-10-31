@@ -33,14 +33,22 @@ func (r *mockBidRepository) RegistrarPujaAtomica(_ context.Context, _ string, pu
 	return nil
 }
 
-func (r *mockBidRepository) ListarPorSubasta(_ context.Context, subastaID string) ([]domain.Puja, error) {
+func (r *mockBidRepository) ListarPorSubasta(_ context.Context, subastaID, bidderID string, minimumAmount float64, limit, offset int) ([]domain.Puja, int, error) {
 	result := make([]domain.Puja, 0)
 	for _, bid := range r.registered {
-		if bid.SubastaID == subastaID {
+		if bid.SubastaID == subastaID && (bidderID == "" || bid.PostorID == bidderID) &&
+			(minimumAmount == 0 || bid.Monto >= minimumAmount) {
 			result = append(result, bid)
 		}
 	}
-	return result, nil
+	if offset > len(result) {
+		offset = len(result)
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], len(result), nil
 }
 
 func TestPlaceBidUsesAuthenticatedBidderAndPersistsBid(t *testing.T) {
