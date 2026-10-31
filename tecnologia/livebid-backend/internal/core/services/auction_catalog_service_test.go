@@ -92,3 +92,24 @@ func (r *settlementGuaranteeRepository) SettleAuction(_ context.Context, auction
 	r.winnerID = winnerID
 	return nil
 }
+
+func TestAuctionCatalogClosesExpiredAuctions(t *testing.T) {
+	now := time.Date(2026, 10, 31, 23, 0, 0, 0, time.UTC)
+	expired := domain.NuevaSubasta("expired", "Obra", "", 100, now.Add(-2*time.Hour), now.Add(-time.Minute))
+	expired.Estado = domain.SubastaActiva
+	current := domain.NuevaSubasta("current", "Otra obra", "", 100, now, now.Add(time.Hour))
+	current.Estado = domain.SubastaActiva
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{
+		expired.ID: expired, current.ID: current,
+	}}
+	service := services.NuevoAuctionCatalogService(repo)
+
+	closed, err := service.CerrarVencidas(context.Background(), now)
+	if err != nil {
+		t.Fatalf("close expired auctions failed: %v", err)
+	}
+	if closed != 1 || expired.Estado != domain.SubastaCerrada || current.Estado != domain.SubastaActiva {
+		t.Fatalf("unexpected expired auction result: closed=%d expired=%s current=%s",
+			closed, expired.Estado, current.Estado)
+	}
+}

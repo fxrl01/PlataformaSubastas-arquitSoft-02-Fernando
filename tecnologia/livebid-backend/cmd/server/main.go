@@ -215,6 +215,13 @@ func main() {
 	}
 
 	// 5. Graceful Shutdown
+	schedulerContext, cancelScheduler := context.WithCancel(context.Background())
+	defer cancelScheduler()
+	go services.NewAuctionScheduler(
+		services.NuevoAuctionCatalogServiceConGarantiasYNotificador(auctionRepository, guaranteeRepository, bidNotifier),
+		10*time.Second,
+	).Run(schedulerContext)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -230,6 +237,7 @@ func main() {
 
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	cancelScheduler()
 
 	if err := server.Shutdown(ctxShutdown); err != nil {
 		log.Fatalf("Error durante shutdown: %v", err)

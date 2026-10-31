@@ -132,6 +132,24 @@ func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *AuctionCatalogService) CerrarVencidas(ctx context.Context, now time.Time) (int, error) {
+	auctions, err := s.repo.Listar(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list expired auctions: %w", err)
+	}
+	closed := 0
+	for _, auction := range auctions {
+		if !auction.Estado.EsAceptandoPujas() || auction.FechaCierre.After(now) {
+			continue
+		}
+		if err := s.Cerrar(ctx, auction.ID); err != nil {
+			return closed, fmt.Errorf("close expired auction %s: %w", auction.ID, err)
+		}
+		closed++
+	}
+	return closed, nil
+}
+
 // NuevoAuctionService crea una nueva instancia de AuctionService inyectando sus dependencias.
 func NuevoAuctionService(
 	repo domain.SubastaRepository,
