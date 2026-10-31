@@ -154,6 +154,7 @@ func main() {
 	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogServiceConGarantias(auctionRepository, guaranteeRepository))
 	bidService := services.NewAuctionBidServiceWithNotifierAndGuarantee(auctionRepository, bidRepository, bidLock, bidNotifier, guaranteeRepository)
 	bidHandler := handlers.NewBidHandler(bidService)
+	bidHistoryHandler := handlers.NewBidHistoryHandler(services.NewBidHistoryService(auctionRepository, bidRepository))
 	guaranteeHandler := handlers.NewGuaranteeHandler(services.NewGuaranteeService(auctionRepository, guaranteeRepository))
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
@@ -175,6 +176,7 @@ func main() {
 			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ActivateUser))))
 	mux.HandleFunc("GET /api/v1/subastas", auctionHandler.List)
 	mux.HandleFunc("GET /api/v1/subastas/{id}", auctionHandler.Get)
+	mux.HandleFunc("GET /api/v1/subastas/{id}/pujas", bidHistoryHandler.List)
 	mux.Handle("POST /api/v1/subastas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleSeller)(http.HandlerFunc(auctionHandler.Create))))
