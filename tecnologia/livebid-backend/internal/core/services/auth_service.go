@@ -49,6 +49,9 @@ func NewAuthService(users domain.UserRepository, hasher domain.PasswordHasher, t
 
 func (s *AuthService) Register(ctx context.Context, cmd RegisterUserCmd) (UserView, error) {
 	email := strings.ToLower(strings.TrimSpace(cmd.Email))
+	if len(cmd.Password) < 8 {
+		return UserView{}, domain.ErrInvalidPassword
+	}
 	if _, err := s.users.FindByEmail(ctx, email); err == nil {
 		return UserView{}, domain.ErrUserAlreadyExists
 	} else if !errors.Is(err, domain.ErrUserNotFound) && err != nil {

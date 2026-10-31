@@ -10,8 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fxrl01/livebid-backend/internal/adapters/handlers"
+	"github.com/fxrl01/livebid-backend/internal/adapters/persistence"
+	"github.com/fxrl01/livebid-backend/internal/adapters/security"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // InMemorySubastaRepo es una implementación ligera en memoria para desarrollo local.
@@ -92,14 +96,42 @@ func main() {
 	_ = subastaDemo.Activar()
 	_ = repo.Guardar(context.Background(), subastaDemo)
 
-	// 2. Inyección de Dependencias
+	// 2. Inyección de Dependencias del motor de subastas
 	lock := &LocalLockAdapter{}
 	escrow := &LocalEscrowAdapter{}
 	notifier := &LocalNotifierAdapter{}
 
 	_ = services.NuevoAuctionService(repo, lock, escrow, notifier, nil)
 
-	// 3. Router HTTP Estándar de Go
+	// 3. PostgreSQL y autenticación
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pool, err := pgxpool.New(dbCtx, databaseURL)
+	dbCancel()
+	if err != nil {
+		log.Fatalf("open database pool: %v", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(context.Background()); err != nil {
+		log.Fatalf("ping database: %v", err)
+	}
+
+	jwtIssuer, err := security.NewJWTIssuer(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		log.Fatalf("configure jwt: %v", err)
+	}
+	userRepository := persistence.NewPostgresUserRepository(pool)
+	authService := services.NewAuthService(
+		userRepository,
+		security.NewBcryptHasher(12),
+		jwtIssuer,
+	)
+	authHandler := handlers.NewAuthHandler(authService)
+
+	// 4. Router HTTP estándar de Go
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +139,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"UP","engine":"Go 1.23","architecture":"Clean/Hexagonal"}`))
 	})
+
+	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
+	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -128,7 +163,7 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	// 4. Graceful Shutdown
+	// 5. Graceful Shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -151,4 +186,3 @@ func main() {
 
 	log.Println(" Servidor LiveBid cerrado exitosamente.")
 }
-

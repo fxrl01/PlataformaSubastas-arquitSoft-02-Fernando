@@ -1,5 +1,4 @@
 services:
-  # 1. Base de Datos Relacional ACID (Cold Path)
   livebid-db:
     image: postgres:16-alpine
     container_name: livebid-postgres
@@ -21,7 +20,6 @@ services:
     networks:
       - livebid-net
 
-  # 2. Almacén en Memoria y Pub/Sub (Hot Path)
   livebid-cache:
     image: redis:7-alpine
     container_name: livebid-redis
@@ -39,7 +37,6 @@ services:
     networks:
       - livebid-net
 
-  # 3. Servidor de API y Motor de Subastas
   livebid-api:
     build:
       context: .
@@ -48,9 +45,9 @@ services:
     restart: always
     environment:
       PORT: 3000
-      NODE_ENV: production
-      DATABASE_URL: postgresql://livebid_admin:livebid_secure_password_2026@livebid-db:5432/livebid_db
+      DATABASE_URL: postgres://livebid_admin:livebid_secure_password_2026@livebid-db:5432/livebid_db
       REDIS_URL: redis://livebid-cache:6379
+      JWT_SECRET: change-this-development-secret
     ports:
       - "3000:3000"
     depends_on:

@@ -53,7 +53,7 @@ func TestRegisterCreatesPendingBidderWithoutPasswordInView(t *testing.T) {
 	service := services.NewAuthService(repo, authHasher{}, authTokenIssuer{})
 
 	view, err := service.Register(context.Background(), services.RegisterUserCmd{
-		Name: "Ana", Email: "ANA@example.com", Password: "secret",
+		Name: "Ana", Email: "ANA@example.com", Password: "secret123",
 	})
 	if err != nil {
 		t.Fatalf("register failed: %v", err)
@@ -68,11 +68,11 @@ func TestRegisterCreatesPendingBidderWithoutPasswordInView(t *testing.T) {
 
 func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 	now := time.Now()
-	existing, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret", now)
+	existing, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret123", now)
 	service := services.NewAuthService(&authUserRepo{user: existing}, authHasher{}, authTokenIssuer{})
 
 	_, err := service.Register(context.Background(), services.RegisterUserCmd{
-		Name: "Otra", Email: "ana@example.com", Password: "secret",
+		Name: "Otra", Email: "ana@example.com", Password: "secret123",
 	})
 	if !errors.Is(err, domain.ErrUserAlreadyExists) {
 		t.Fatalf("expected duplicate error, got %v", err)
@@ -81,11 +81,11 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 
 func TestLoginRejectsInactiveUserWithoutRevealingStatus(t *testing.T) {
 	now := time.Now()
-	user, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret", now)
+	user, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret123", now)
 	service := services.NewAuthService(&authUserRepo{user: user}, authHasher{}, authTokenIssuer{})
 
 	_, err := service.Login(context.Background(), services.LoginCmd{
-		Email: "ana@example.com", Password: "secret",
+		Email: "ana@example.com", Password: "secret123",
 	})
 	if !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("expected generic credentials error, got %v", err)
@@ -94,12 +94,12 @@ func TestLoginRejectsInactiveUserWithoutRevealingStatus(t *testing.T) {
 
 func TestLoginIssuesTokenForActiveUser(t *testing.T) {
 	now := time.Now()
-	user, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret", now)
+	user, _ := domain.NewUser("usr-1", "Ana", "ana@example.com", "hash:secret123", now)
 	user.Status = domain.UserActive
 	service := services.NewAuthService(&authUserRepo{user: user}, authHasher{}, authTokenIssuer{})
 
 	response, err := service.Login(context.Background(), services.LoginCmd{
-		Email: "ana@example.com", Password: "secret",
+		Email: "ana@example.com", Password: "secret123",
 	})
 	if err != nil {
 		t.Fatalf("login failed: %v", err)

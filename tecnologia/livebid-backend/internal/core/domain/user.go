@@ -9,10 +9,10 @@ import (
 type UserRole string
 
 const (
-	RoleBidder    UserRole = "POSTOR"
-	RoleSeller    UserRole = "VENDEDOR"
+	RoleBidder     UserRole = "POSTOR"
+	RoleSeller     UserRole = "VENDEDOR"
 	RoleAuctioneer UserRole = "MARTILLERO"
-	RoleAdmin     UserRole = "ADMIN"
+	RoleAdmin      UserRole = "ADMIN"
 )
 
 type UserStatus string

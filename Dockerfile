@@ -1,18 +1,20 @@
-FROM node:24-alpine
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
+COPY tecnologia/livebid-backend/go.mod ./
+RUN go mod download
+COPY tecnologia/livebid-backend ./
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/livebid-server ./cmd/server
 
-# Copiar configuración de dependencias
-COPY tecnologia/boilerplate-clean-arquitecture/package.json ./
-
-# Copiar código fuente
-COPY tecnologia/boilerplate-clean-arquitecture/src ./src
-COPY tecnologia/boilerplate-clean-arquitecture/tsconfig.json ./
+FROM alpine:3.20
+WORKDIR /app
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /app/livebid-server /app/livebid-server
+RUN adduser -D -u 1000 livebiduser
+USER livebiduser
 
 EXPOSE 3000
-
 ENV PORT=3000
-ENV NODE_ENV=production
-
-# Ejecutar directamente con Node 24 experimental-strip-types
-CMD ["node", "--experimental-strip-types", "src/main.ts"]
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+ENTRYPOINT ["/app/livebid-server"]
