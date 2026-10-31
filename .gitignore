@@ -9,6 +9,14 @@ Thumbs.db
 .idea/
 node_modules/
 
+# Configuración local y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
 # Archivos del sistema operativo
 *.swp
 

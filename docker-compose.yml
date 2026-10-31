@@ -5,15 +5,15 @@ services:
     restart: always
     environment:
       POSTGRES_DB: livebid_db
-      POSTGRES_USER: livebid_admin
-      POSTGRES_PASSWORD: livebid_secure_password_2026
+      POSTGRES_USER: ${POSTGRES_USER:-livebid_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U livebid_admin -d livebid_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-livebid_admin} -d livebid_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,9 +45,9 @@ services:
     restart: always
     environment:
       PORT: 3000
-      DATABASE_URL: postgres://livebid_admin:livebid_secure_password_2026@livebid-db:5432/livebid_db
+      DATABASE_URL: postgres://${POSTGRES_USER:-livebid_admin}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}@livebid-db:5432/livebid_db
       REDIS_URL: redis://livebid-cache:6379
-      JWT_SECRET: change-this-development-secret
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET in .env}
     ports:
       - "3000:3000"
     depends_on:

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/fxrl01/livebid-backend/internal/adapters/security"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
 )
@@ -17,6 +19,62 @@ func NewAuthHandler(auth *services.AuthService) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
 
+type authContextKey struct{}
+
+type AuthenticatedUser struct {
+	ID   string          `json:"id"`
+	Role domain.UserRole `json:"role"`
+}
+
+func RequireAuth(issuer *security.JWTIssuer, users domain.UserRepository, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
+		header := r.Header.Get("Authorization")
+		if len(header) <= len(prefix) || header[:len(prefix)] != prefix {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			return
+		}
+		claims, err := issuer.Verify(header[len(prefix):])
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid authentication token"})
+			return
+		}
+		user, err := users.FindByID(r.Context(), claims.UserID)
+		if err != nil || user.Status != domain.UserActive || user.Role != claims.Role {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid authentication token"})
+			return
+		}
+		ctx := context.WithValue(r.Context(), authContextKey{}, AuthenticatedUser{ID: user.ID, Role: user.Role})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func CurrentUser(r *http.Request) (AuthenticatedUser, bool) {
+	user, ok := r.Context().Value(authContextKey{}).(AuthenticatedUser)
+	return user, ok
+}
+
+func RequireRoles(roles ...domain.UserRole) func(http.Handler) http.Handler {
+	allowed := make(map[domain.UserRole]struct{}, len(roles))
+	for _, role := range roles {
+		allowed[role] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user, ok := CurrentUser(r)
+			if !ok {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+				return
+			}
+			if _, ok := allowed[user.Role]; !ok {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "insufficient permissions"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 type registerRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -26,6 +84,10 @@ type registerRequest struct {
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +118,40 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var request refreshRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	response, err := h.auth.Refresh(r.Context(), request.RefreshToken)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *AuthHandler) ActivateUser(w http.ResponseWriter, r *http.Request) {
+	if err := h.auth.ActivateUser(r.Context(), r.PathValue("id")); err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {

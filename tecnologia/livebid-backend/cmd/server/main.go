@@ -128,6 +128,7 @@ func main() {
 		userRepository,
 		security.NewBcryptHasher(12),
 		jwtIssuer,
+		persistence.NewPostgresRefreshTokenStore(pool),
 	)
 	authHandler := handlers.NewAuthHandler(authService)
 
@@ -142,6 +143,11 @@ func main() {
 
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.Me)))
+	mux.Handle("PATCH /api/v1/admin/users/{id}/activate",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ActivateUser))))
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -25,13 +25,14 @@ const (
 )
 
 var (
-	ErrInvalidEmail       = errors.New("domain: correo inválido")
-	ErrInvalidPassword    = errors.New("domain: contraseña inválida")
-	ErrInvalidUser        = errors.New("domain: usuario inválido")
-	ErrUserAlreadyExists  = errors.New("domain: usuario ya registrado")
-	ErrUserNotFound       = errors.New("domain: usuario no encontrado")
-	ErrInvalidCredentials = errors.New("domain: credenciales inválidas")
-	ErrUserNotActive      = errors.New("domain: usuario no activo")
+	ErrInvalidEmail        = errors.New("domain: correo inválido")
+	ErrInvalidPassword     = errors.New("domain: contraseña inválida")
+	ErrInvalidUser         = errors.New("domain: usuario inválido")
+	ErrUserAlreadyExists   = errors.New("domain: usuario ya registrado")
+	ErrUserNotFound        = errors.New("domain: usuario no encontrado")
+	ErrInvalidCredentials  = errors.New("domain: credenciales inválidas")
+	ErrUserNotActive       = errors.New("domain: usuario no activo")
+	ErrRefreshTokenInvalid = errors.New("domain: refresh token inválido")
 )
 
 type User struct {

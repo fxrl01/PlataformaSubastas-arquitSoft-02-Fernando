@@ -24,11 +24,7 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 		SELECT id, nombre, email, password_hash, rol, estado, created_at, updated_at
 		FROM usuarios WHERE email = $1`
 
-	user := &domain.User{}
-	err := r.pool.QueryRow(ctx, query, email).Scan(
-		&user.ID, &user.Name, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Status, &user.CreatedAt, &user.UpdatedAt,
-	)
+	user, err := scanUser(r.pool.QueryRow(ctx, query, email))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
@@ -36,6 +32,33 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
 	return user, nil
+}
+
+func (r *PostgresUserRepository) FindByID(ctx context.Context, id string) (*domain.User, error) {
+	const query = `
+		SELECT id, nombre, email, password_hash, rol, estado, created_at, updated_at
+		FROM usuarios WHERE id = $1`
+	user, err := scanUser(r.pool.QueryRow(ctx, query, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find user by id: %w", err)
+	}
+	return user, nil
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanUser(row rowScanner) (*domain.User, error) {
+	user := &domain.User{}
+	err := row.Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash,
+		&user.Role, &user.Status, &user.CreatedAt, &user.UpdatedAt,
+	)
+	return user, err
 }
 
 func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User) error {
@@ -52,6 +75,17 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User) er
 			return domain.ErrUserAlreadyExists
 		}
 		return fmt.Errorf("save user: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresUserRepository) UpdateStatus(ctx context.Context, id string, status domain.UserStatus) error {
+	result, err := r.pool.Exec(ctx, `UPDATE usuarios SET estado = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, status, id)
+	if err != nil {
+		return fmt.Errorf("update user status: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
 	}
 	return nil
 }

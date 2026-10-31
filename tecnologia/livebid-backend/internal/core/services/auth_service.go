@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -12,10 +13,11 @@ import (
 )
 
 type AuthService struct {
-	users  domain.UserRepository
-	hasher domain.PasswordHasher
-	tokens domain.TokenIssuer
-	now    func() time.Time
+	users         domain.UserRepository
+	hasher        domain.PasswordHasher
+	tokens        domain.TokenIssuer
+	refreshTokens domain.RefreshTokenStore
+	now           func() time.Time
 }
 
 type RegisterUserCmd struct {
@@ -30,9 +32,10 @@ type LoginCmd struct {
 }
 
 type AuthResponse struct {
-	AccessToken string
-	ExpiresAt   time.Time
-	User        UserView
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	User         UserView  `json:"user"`
 }
 
 type UserView struct {
@@ -43,8 +46,12 @@ type UserView struct {
 	Status domain.UserStatus `json:"status"`
 }
 
-func NewAuthService(users domain.UserRepository, hasher domain.PasswordHasher, tokens domain.TokenIssuer) *AuthService {
-	return &AuthService{users: users, hasher: hasher, tokens: tokens, now: time.Now}
+func NewAuthService(users domain.UserRepository, hasher domain.PasswordHasher, tokens domain.TokenIssuer, refreshTokens ...domain.RefreshTokenStore) *AuthService {
+	var store domain.RefreshTokenStore
+	if len(refreshTokens) > 0 {
+		store = refreshTokens[0]
+	}
+	return &AuthService{users: users, hasher: hasher, tokens: tokens, refreshTokens: store, now: time.Now}
 }
 
 func (s *AuthService) Register(ctx context.Context, cmd RegisterUserCmd) (UserView, error) {
@@ -92,7 +99,61 @@ func (s *AuthService) Login(ctx context.Context, cmd LoginCmd) (AuthResponse, er
 	if err != nil {
 		return AuthResponse{}, err
 	}
-	return AuthResponse{AccessToken: token, ExpiresAt: expiresAt, User: toUserView(user)}, nil
+	response := AuthResponse{AccessToken: token, ExpiresAt: expiresAt, User: toUserView(user)}
+	if s.refreshTokens != nil {
+		refreshToken, err := s.createRefreshToken(ctx, user.ID)
+		if err != nil {
+			return AuthResponse{}, err
+		}
+		response.RefreshToken = refreshToken
+	}
+	return response, nil
+}
+
+func (s *AuthService) ActivateUser(ctx context.Context, id string) error {
+	if _, err := s.users.FindByID(ctx, id); err != nil {
+		return err
+	}
+	return s.users.UpdateStatus(ctx, id, domain.UserActive)
+}
+
+func (s *AuthService) Refresh(ctx context.Context, rawToken string) (AuthResponse, error) {
+	if s.refreshTokens == nil || rawToken == "" {
+		return AuthResponse{}, domain.ErrRefreshTokenInvalid
+	}
+	hash := sha256.Sum256([]byte(rawToken))
+	userID, err := s.refreshTokens.Consume(ctx, hex.EncodeToString(hash[:]))
+	if err != nil {
+		return AuthResponse{}, domain.ErrRefreshTokenInvalid
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil || user.Status != domain.UserActive {
+		return AuthResponse{}, domain.ErrRefreshTokenInvalid
+	}
+	expiresAt := s.now().Add(15 * time.Minute)
+	accessToken, err := s.tokens.Issue(domain.TokenClaims{UserID: user.ID, Role: user.Role}, expiresAt)
+	if err != nil {
+		return AuthResponse{}, err
+	}
+	refreshToken, err := s.createRefreshToken(ctx, user.ID)
+	if err != nil {
+		return AuthResponse{}, err
+	}
+	return AuthResponse{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresAt: expiresAt, User: toUserView(user)}, nil
+}
+
+func (s *AuthService) createRefreshToken(ctx context.Context, userID string) (string, error) {
+	rawBytes := make([]byte, 32)
+	if _, err := rand.Read(rawBytes); err != nil {
+		return "", err
+	}
+	raw := hex.EncodeToString(rawBytes)
+	hash := sha256.Sum256([]byte(raw))
+	expiresAt := s.now().Add(7 * 24 * time.Hour)
+	if err := s.refreshTokens.Save(ctx, hex.EncodeToString(hash[:]), userID, expiresAt); err != nil {
+		return "", err
+	}
+	return raw, nil
 }
 
 func toUserView(user *domain.User) UserView {

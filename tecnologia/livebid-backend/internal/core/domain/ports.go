@@ -7,7 +7,9 @@ import (
 
 type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	FindByID(ctx context.Context, id string) (*User, error)
 	Save(ctx context.Context, user *User) error
+	UpdateStatus(ctx context.Context, id string, status UserStatus) error
 }
 
 type PasswordHasher interface {
@@ -22,6 +24,11 @@ type TokenClaims struct {
 
 type TokenIssuer interface {
 	Issue(claims TokenClaims, expiresAt time.Time) (string, error)
+}
+
+type RefreshTokenStore interface {
+	Save(ctx context.Context, tokenHash, userID string, expiresAt time.Time) error
+	Consume(ctx context.Context, tokenHash string) (string, error)
 }
 
 // UnlockFunc es un callback para liberar un lock atómico adquirido.
