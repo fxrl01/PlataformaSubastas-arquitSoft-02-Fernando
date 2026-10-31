@@ -150,3 +150,4 @@ En lugar de depender pasivamente de reglas fijas, LiveBid integra a **Google Gem
 | **Caché & Mutex Atómico** | Redis 7.2 In-Memory | Infraestructura | Control de concurrencia atómica (anti-colisiones) y distribución de eventos Pub/Sub. |
 | **Base de Datos Transaccional** | PostgreSQL 16 (AWS RDS Free Tier) | Infraestructura | Almacén de verdad contable y legal: usuarios, catálogo, depósitos en garantía y auditoría inmutable. |
 | **Agente de Riesgo IA** | Gemini API + Circuit Breaker en Go | Infraestructura | Evaluación de patrones de fraude y validación de solvencia crediticia. |
+s

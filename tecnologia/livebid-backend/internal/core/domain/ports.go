@@ -5,6 +5,25 @@ import (
 	"time"
 )
 
+type UserRepository interface {
+	FindByEmail(ctx context.Context, email string) (*User, error)
+	Save(ctx context.Context, user *User) error
+}
+
+type PasswordHasher interface {
+	Hash(password string) (string, error)
+	Compare(hash, password string) error
+}
+
+type TokenClaims struct {
+	UserID string
+	Role   UserRole
+}
+
+type TokenIssuer interface {
+	Issue(claims TokenClaims, expiresAt time.Time) (string, error)
+}
+
 // UnlockFunc es un callback para liberar un lock atómico adquirido.
 type UnlockFunc func() error
 
@@ -45,4 +64,3 @@ const (
 type AIRiskPort interface {
 	EvaluarRiesgo(ctx context.Context, postorID string, subastaID string, monto float64) (NivelRiesgo, error)
 }
-

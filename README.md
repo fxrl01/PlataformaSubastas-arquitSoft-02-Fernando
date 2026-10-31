@@ -1,9 +1,5 @@
 # LiveBid — Plataforma de Subastas en Tiempo Real
 
-> **Asignatura:** IS-488 Arquitectura de Software  
-> **Docente:** Ing. Lizbeth Jaico Quispe  
-> **Estudiante:** Fernando Olivares Chuhui  
-> **Semestre:** 2026-II  
 > **Enfoque de Diseño:** Software Design Description (SDD) · Clean Architecture · Modelo C4
 
 ---
