@@ -151,7 +151,7 @@ func main() {
 		persistence.NewPostgresRefreshTokenStore(pool),
 	)
 	authHandler := handlers.NewAuthHandler(authService)
-	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogServiceConGarantias(auctionRepository, guaranteeRepository))
+	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogServiceConGarantiasYNotificador(auctionRepository, guaranteeRepository, bidNotifier))
 	bidService := services.NewAuctionBidServiceWithNotifierAndGuarantee(auctionRepository, bidRepository, bidLock, bidNotifier, guaranteeRepository)
 	bidHandler := handlers.NewBidHandler(bidService)
 	bidHistoryHandler := handlers.NewBidHistoryHandler(services.NewBidHistoryService(auctionRepository, bidRepository))

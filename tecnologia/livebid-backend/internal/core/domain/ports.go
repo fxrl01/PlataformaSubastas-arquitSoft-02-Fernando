@@ -53,6 +53,7 @@ type BidLockPort interface {
 
 type BidNotifierPort interface {
 	BroadcastNuevaPuja(ctx context.Context, subastaID string, puja Puja, tiempoExtendido bool, fechaCierre time.Time) error
+	BroadcastSubastaCerrada(ctx context.Context, subastaID string, ganadora *Puja) error
 }
 
 type GuaranteeRepository interface {

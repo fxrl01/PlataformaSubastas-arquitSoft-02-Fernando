@@ -40,6 +40,7 @@ type AuctionService struct {
 type AuctionCatalogService struct {
 	repo       domain.SubastaRepository
 	guarantees domain.GuaranteeRepository
+	notifier   domain.BidNotifierPort
 	now        func() time.Time
 }
 
@@ -59,6 +60,10 @@ func NuevoAuctionCatalogService(repo domain.SubastaRepository) *AuctionCatalogSe
 
 func NuevoAuctionCatalogServiceConGarantias(repo domain.SubastaRepository, guarantees domain.GuaranteeRepository) *AuctionCatalogService {
 	return &AuctionCatalogService{repo: repo, guarantees: guarantees, now: time.Now}
+}
+
+func NuevoAuctionCatalogServiceConGarantiasYNotificador(repo domain.SubastaRepository, guarantees domain.GuaranteeRepository, notifier domain.BidNotifierPort) *AuctionCatalogService {
+	return &AuctionCatalogService{repo: repo, guarantees: guarantees, notifier: notifier, now: time.Now}
 }
 
 func (s *AuctionCatalogService) Crear(ctx context.Context, cmd CrearSubastaCmd) (*domain.Subasta, error) {
@@ -110,6 +115,18 @@ func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {
 	if s.guarantees != nil {
 		if err := s.guarantees.SettleAuction(ctx, subasta.ID, subasta.PostorLiderID); err != nil {
 			return fmt.Errorf("settle auction guarantees: %w", err)
+		}
+	}
+	if s.notifier != nil {
+		var winner *domain.Puja
+		if subasta.PostorLiderID != "" {
+			winner = &domain.Puja{
+				SubastaID: subasta.ID, PostorID: subasta.PostorLiderID,
+				Monto: subasta.PrecioActual, Timestamp: s.now(),
+			}
+		}
+		if err := s.notifier.BroadcastSubastaCerrada(ctx, subasta.ID, winner); err != nil {
+			return fmt.Errorf("broadcast auction closure: %w", err)
 		}
 	}
 	return nil
