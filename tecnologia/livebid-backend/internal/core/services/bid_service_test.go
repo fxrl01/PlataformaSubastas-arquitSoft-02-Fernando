@@ -33,6 +33,16 @@ func (r *mockBidRepository) RegistrarPujaAtomica(_ context.Context, _ string, pu
 	return nil
 }
 
+func (r *mockBidRepository) ListarPorSubasta(_ context.Context, subastaID string) ([]domain.Puja, error) {
+	result := make([]domain.Puja, 0)
+	for _, bid := range r.registered {
+		if bid.SubastaID == subastaID {
+			result = append(result, bid)
+		}
+	}
+	return result, nil
+}
+
 func TestPlaceBidUsesAuthenticatedBidderAndPersistsBid(t *testing.T) {
 	now := time.Now()
 	auction := domain.NuevaSubasta("sub-1", "Laptop", "", 2500, now, now.Add(time.Hour))

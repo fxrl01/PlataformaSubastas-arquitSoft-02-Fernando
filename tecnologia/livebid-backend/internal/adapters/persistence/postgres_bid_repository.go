@@ -77,3 +77,33 @@ func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subast
 	}
 	return nil
 }
+
+func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID string) ([]domain.Puja, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, subasta_id, postor_id, monto::text, timestamp_oficial
+		FROM pujas
+		WHERE subasta_id = $1
+		ORDER BY correlativo ASC`, subastaID)
+	if err != nil {
+		return nil, fmt.Errorf("list auction bids: %w", err)
+	}
+	defer rows.Close()
+
+	bids := make([]domain.Puja, 0)
+	for rows.Next() {
+		var bid domain.Puja
+		var amount string
+		if err := rows.Scan(&bid.ID, &bid.SubastaID, &bid.PostorID, &amount, &bid.Timestamp); err != nil {
+			return nil, fmt.Errorf("scan auction bid: %w", err)
+		}
+		bid.Monto, err = strconv.ParseFloat(amount, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse bid amount: %w", err)
+		}
+		bids = append(bids, bid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate auction bids: %w", err)
+	}
+	return bids, nil
+}
