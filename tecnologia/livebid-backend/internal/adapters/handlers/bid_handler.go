@@ -32,6 +32,7 @@ func (h *BidHandler) Place(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := h.bids.PlaceBid(r.Context(), services.PlaceBidCmd{
 		SubastaID: r.PathValue("id"), PostorID: user.ID, Monto: request.Monto,
+		IdempotencyKey: r.Header.Get("Idempotency-Key"),
 	})
 	if err != nil {
 		switch {
@@ -42,6 +43,8 @@ func (h *BidHandler) Place(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "bid rejected"})
 		case errors.Is(err, domain.ErrPujaConcurrente):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "auction changed, retry bid"})
+		case errors.Is(err, domain.ErrIdempotencyKeyConflict):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "idempotency key reused with another amount"})
 		case errors.Is(err, domain.ErrLockTimeout):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "auction busy, retry bid"})
 		default:

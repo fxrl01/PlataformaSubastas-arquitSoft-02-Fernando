@@ -42,7 +42,8 @@ type SubastaRepository interface {
 }
 
 type BidRepository interface {
-	RegistrarPujaAtomica(ctx context.Context, subastaID string, puja Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool) error
+	BuscarPorIdempotencyKey(ctx context.Context, subastaID, bidderID, key string) (*Puja, error)
+	RegistrarPujaAtomica(ctx context.Context, subastaID string, puja Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool, idempotencyKey string) error
 	ListarPorSubasta(ctx context.Context, subastaID, bidderID string, minimumAmount float64, limit, offset int) ([]Puja, int, error)
 }
 

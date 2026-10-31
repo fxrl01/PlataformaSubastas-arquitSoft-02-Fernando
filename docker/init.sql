@@ -83,10 +83,16 @@ CREATE TABLE IF NOT EXISTS pujas (
     correlativo INT NOT NULL,
     timestamp_oficial TIMESTAMP WITH TIME ZONE NOT NULL,
     anti_sniping_disparado BOOLEAN DEFAULT FALSE,
+    idempotency_key VARCHAR(128),
     hash_auditoria VARCHAR(64),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_subasta_correlativo UNIQUE (subasta_id, correlativo)
 );
+
+ALTER TABLE pujas ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(128);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pujas_idempotency
+    ON pujas(subasta_id, postor_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_pujas_subasta_correlativo ON pujas(subasta_id, correlativo DESC);
 

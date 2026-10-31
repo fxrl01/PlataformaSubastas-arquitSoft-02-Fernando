@@ -19,9 +19,10 @@ type AuctionBidService struct {
 }
 
 type PlaceBidCmd struct {
-	SubastaID string
-	PostorID  string
-	Monto     float64
+	SubastaID      string
+	PostorID       string
+	Monto          float64
+	IdempotencyKey string
 }
 
 type BidResponse struct {
@@ -69,6 +70,22 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 			return BidResponse{}, domain.ErrGarantiaInsuficiente
 		}
 	}
+	if cmd.IdempotencyKey != "" {
+		existing, err := s.bids.BuscarPorIdempotencyKey(ctx, cmd.SubastaID, cmd.PostorID, cmd.IdempotencyKey)
+		if err != nil {
+			return BidResponse{}, err
+		}
+		if existing != nil {
+			if existing.Monto != cmd.Monto {
+				return BidResponse{}, domain.ErrIdempotencyKeyConflict
+			}
+			return BidResponse{
+				PujaID: existing.ID, SubastaID: subasta.ID, PostorLiderID: subasta.PostorLiderID,
+				PrecioActual: subasta.PrecioActual, FechaCierre: subasta.FechaCierre,
+				Estado: subasta.Estado,
+			}, nil
+		}
+	}
 	now := s.now()
 	precioAnterior := subasta.PrecioActual
 	pujaID, err := newID("bid_")
@@ -79,7 +96,7 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 	if err != nil {
 		return BidResponse{}, err
 	}
-	if err := s.bids.RegistrarPujaAtomica(ctx, subasta.ID, *puja, precioAnterior, subasta.FechaCierre, extended); err != nil {
+	if err := s.bids.RegistrarPujaAtomica(ctx, subasta.ID, *puja, precioAnterior, subasta.FechaCierre, extended, cmd.IdempotencyKey); err != nil {
 		return BidResponse{}, err
 	}
 	if s.notifier != nil {
