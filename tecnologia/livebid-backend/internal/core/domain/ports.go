@@ -50,6 +50,10 @@ type BidLockPort interface {
 	AdquirirLock(ctx context.Context, subastaID string, ttl time.Duration) (UnlockFunc, error)
 }
 
+type BidNotifierPort interface {
+	BroadcastNuevaPuja(ctx context.Context, subastaID string, puja Puja, tiempoExtendido bool, fechaCierre time.Time) error
+}
+
 // PaymentEscrowPort define el puerto para validar y retener garantías de postores.
 type PaymentEscrowPort interface {
 	ValidarGarantiaActiva(ctx context.Context, postorID string, subastaID string) (bool, error)

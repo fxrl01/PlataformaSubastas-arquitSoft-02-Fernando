@@ -13,6 +13,7 @@ type AuctionBidService struct {
 	auctions domain.SubastaRepository
 	bids     domain.BidRepository
 	lock     domain.BidLockPort
+	notifier domain.BidNotifierPort
 	now      func() time.Time
 }
 
@@ -38,6 +39,10 @@ func NewAuctionBidService(auctions domain.SubastaRepository, bids domain.BidRepo
 		lock = locks[0]
 	}
 	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, now: time.Now}
+}
+
+func NewAuctionBidServiceWithNotifier(auctions domain.SubastaRepository, bids domain.BidRepository, lock domain.BidLockPort, notifier domain.BidNotifierPort) *AuctionBidService {
+	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, notifier: notifier, now: time.Now}
 }
 
 func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidResponse, error) {
@@ -66,6 +71,11 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 	}
 	if err := s.bids.RegistrarPujaAtomica(ctx, subasta.ID, *puja, precioAnterior, subasta.FechaCierre, extended); err != nil {
 		return BidResponse{}, err
+	}
+	if s.notifier != nil {
+		if err := s.notifier.BroadcastNuevaPuja(ctx, subasta.ID, *puja, extended, subasta.FechaCierre); err != nil {
+			return BidResponse{}, err
+		}
 	}
 	return BidResponse{
 		PujaID: puja.ID, SubastaID: subasta.ID, PostorLiderID: subasta.PostorLiderID,

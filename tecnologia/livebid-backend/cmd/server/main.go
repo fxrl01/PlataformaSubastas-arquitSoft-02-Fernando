@@ -12,6 +12,7 @@ import (
 
 	"github.com/fxrl01/livebid-backend/internal/adapters/handlers"
 	"github.com/fxrl01/livebid-backend/internal/adapters/persistence"
+	"github.com/fxrl01/livebid-backend/internal/adapters/realtime"
 	"github.com/fxrl01/livebid-backend/internal/adapters/security"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
@@ -141,6 +142,7 @@ func main() {
 		log.Fatalf("ping redis: %v", err)
 	}
 	bidLock := persistence.NewRedisBidLock(redisClient)
+	bidNotifier := realtime.NewRedisBidNotifier(redisClient)
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
@@ -149,7 +151,9 @@ func main() {
 	)
 	authHandler := handlers.NewAuthHandler(authService)
 	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogService(auctionRepository))
-	bidHandler := handlers.NewBidHandler(services.NewAuctionBidService(auctionRepository, bidRepository, bidLock))
+	bidService := services.NewAuctionBidServiceWithNotifier(auctionRepository, bidRepository, bidLock, bidNotifier)
+	bidHandler := handlers.NewBidHandler(bidService)
+	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
 	// 4. Router HTTP estándar de Go
 	mux := http.NewServeMux()
@@ -181,6 +185,7 @@ func main() {
 	mux.Handle("POST /api/v1/subastas/{id}/pujas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(bidHandler.Place))))
+	mux.Handle("GET /ws/subastas/{id}", webSocketHandler)
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
