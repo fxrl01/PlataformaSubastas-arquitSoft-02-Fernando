@@ -20,6 +20,14 @@ type BidEvent struct {
 	CloseAt   time.Time `json:"close_at"`
 }
 
+type AuctionClosedEvent struct {
+	Type      string    `json:"type"`
+	AuctionID string    `json:"auction_id"`
+	WinnerID  string    `json:"winner_id,omitempty"`
+	Amount    float64   `json:"amount,omitempty"`
+	ClosedAt  time.Time `json:"closed_at"`
+}
+
 type RedisBidNotifier struct {
 	client *redis.Client
 	prefix string
@@ -39,6 +47,24 @@ func (n *RedisBidNotifier) BroadcastNuevaPuja(ctx context.Context, auctionID str
 	}
 	if err := n.client.Publish(ctx, n.prefix+auctionID, event).Err(); err != nil {
 		return fmt.Errorf("publish bid event: %w", err)
+	}
+	return nil
+}
+
+func (n *RedisBidNotifier) BroadcastSubastaCerrada(ctx context.Context, auctionID string, winner *domain.Puja) error {
+	event := AuctionClosedEvent{
+		Type: "auction.closed", AuctionID: auctionID, ClosedAt: time.Now().UTC(),
+	}
+	if winner != nil {
+		event.WinnerID = winner.PostorID
+		event.Amount = winner.Monto
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal auction closure event: %w", err)
+	}
+	if err := n.client.Publish(ctx, n.prefix+auctionID, payload).Err(); err != nil {
+		return fmt.Errorf("publish auction closure event: %w", err)
 	}
 	return nil
 }
