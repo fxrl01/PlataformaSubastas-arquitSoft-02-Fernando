@@ -10,8 +10,10 @@ import (
 )
 
 type mockGuaranteeRepository struct {
-	active *domain.Guarantee
-	saved  *domain.Guarantee
+	active           *domain.Guarantee
+	saved            *domain.Guarantee
+	settledAuctionID string
+	settledWinnerID  string
 }
 
 func (r *mockGuaranteeRepository) FindActive(context.Context, string, string) (*domain.Guarantee, error) {
@@ -24,6 +26,12 @@ func (r *mockGuaranteeRepository) FindActive(context.Context, string, string) (*
 func (r *mockGuaranteeRepository) Save(_ context.Context, guarantee *domain.Guarantee) error {
 	r.saved = guarantee
 	r.active = guarantee
+	return nil
+}
+
+func (r *mockGuaranteeRepository) SettleAuction(_ context.Context, auctionID, winnerID string) error {
+	r.settledAuctionID = auctionID
+	r.settledWinnerID = winnerID
 	return nil
 }
 

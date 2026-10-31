@@ -56,3 +56,39 @@ func TestAuctionCatalogActivatesAndClosesAuction(t *testing.T) {
 		t.Fatalf("expected closed auction, got %s", auction.Estado)
 	}
 }
+
+func TestAuctionCatalogSettlesGuaranteesWhenClosing(t *testing.T) {
+	start := time.Now().Add(time.Hour)
+	auction := domain.NuevaSubasta("sub-1", "Obra", "", 100, start, start.Add(time.Hour))
+	auction.Estado = domain.SubastaActiva
+	auction.PostorLiderID = "usr-winner"
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}}
+	guarantees := &settlementGuaranteeRepository{}
+	service := services.NuevoAuctionCatalogServiceConGarantias(repo, guarantees)
+
+	if err := service.Cerrar(context.Background(), "sub-1"); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	if guarantees.auctionID != "sub-1" || guarantees.winnerID != "usr-winner" {
+		t.Fatalf("unexpected settlement: auction=%q winner=%q", guarantees.auctionID, guarantees.winnerID)
+	}
+}
+
+type settlementGuaranteeRepository struct {
+	auctionID string
+	winnerID  string
+}
+
+func (r *settlementGuaranteeRepository) FindActive(context.Context, string, string) (*domain.Guarantee, error) {
+	return nil, domain.ErrUserNotFound
+}
+
+func (r *settlementGuaranteeRepository) Save(context.Context, *domain.Guarantee) error {
+	return nil
+}
+
+func (r *settlementGuaranteeRepository) SettleAuction(_ context.Context, auctionID, winnerID string) error {
+	r.auctionID = auctionID
+	r.winnerID = winnerID
+	return nil
+}

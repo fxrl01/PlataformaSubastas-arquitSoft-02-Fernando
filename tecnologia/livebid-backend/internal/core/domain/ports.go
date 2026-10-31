@@ -57,6 +57,7 @@ type BidNotifierPort interface {
 type GuaranteeRepository interface {
 	FindActive(ctx context.Context, auctionID, bidderID string) (*Guarantee, error)
 	Save(ctx context.Context, guarantee *Guarantee) error
+	SettleAuction(ctx context.Context, auctionID, winnerID string) error
 }
 
 // PaymentEscrowPort define el puerto para validar y retener garantías de postores.
