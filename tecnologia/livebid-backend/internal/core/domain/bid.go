@@ -31,4 +31,3 @@ func NuevaPuja(id, subastaID, postorID string, monto float64, timestamp time.Tim
 		Timestamp: timestamp,
 	}
 }
-

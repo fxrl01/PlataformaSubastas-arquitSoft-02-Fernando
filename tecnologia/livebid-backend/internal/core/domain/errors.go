@@ -30,5 +30,5 @@ var (
 
 	// ErrSubastaNoEncontrada se produce cuando la subasta solicitada no existe en el repositorio.
 	ErrSubastaNoEncontrada = errors.New("domain: la subasta solicitada no fue encontrada")
+	ErrSubastaInvalida     = errors.New("domain: datos de subasta inválidos")
 )
-

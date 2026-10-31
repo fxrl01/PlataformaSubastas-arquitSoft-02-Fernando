@@ -35,6 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 -- 2. Tabla de Subastas y Lotes
 CREATE TABLE IF NOT EXISTS subastas (
     id VARCHAR(64) PRIMARY KEY,
+    vendedor_id VARCHAR(64) REFERENCES usuarios(id),
     titulo VARCHAR(255) NOT NULL,
     descripcion TEXT,
     precio_base NUMERIC(12, 2) NOT NULL CHECK (precio_base > 0),
@@ -42,9 +43,13 @@ CREATE TABLE IF NOT EXISTS subastas (
     precio_actual NUMERIC(12, 2) NOT NULL,
     postor_lider_id VARCHAR(64) REFERENCES usuarios(id),
     estado VARCHAR(30) NOT NULL CHECK (estado IN ('PROGRAMADA', 'ACTIVA', 'EN_CONTEO_MARTILLO', 'ADJUDICADA', 'DESIERTA', 'CANCELADA')),
+    inicio_programado TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fin_programado TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE subastas ADD COLUMN IF NOT EXISTS vendedor_id VARCHAR(64) REFERENCES usuarios(id);
+ALTER TABLE subastas ADD COLUMN IF NOT EXISTS inicio_programado TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- Índices de alto rendimiento para sala en vivo
 CREATE INDEX IF NOT EXISTS idx_subastas_estado ON subastas(estado);

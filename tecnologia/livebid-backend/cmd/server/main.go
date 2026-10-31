@@ -36,6 +36,14 @@ func (r *InMemorySubastaRepo) Guardar(_ context.Context, s *domain.Subasta) erro
 	return nil
 }
 
+func (r *InMemorySubastaRepo) Listar(_ context.Context) ([]*domain.Subasta, error) {
+	result := make([]*domain.Subasta, 0, len(r.subastas))
+	for _, subasta := range r.subastas {
+		result = append(result, subasta)
+	}
+	return result, nil
+}
+
 // LocalLockAdapter implementa BidLockPort localmente.
 type LocalLockAdapter struct{}
 
@@ -124,6 +132,7 @@ func main() {
 		log.Fatalf("configure jwt: %v", err)
 	}
 	userRepository := persistence.NewPostgresUserRepository(pool)
+	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
@@ -131,6 +140,7 @@ func main() {
 		persistence.NewPostgresRefreshTokenStore(pool),
 	)
 	authHandler := handlers.NewAuthHandler(authService)
+	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogService(auctionRepository))
 
 	// 4. Router HTTP estándar de Go
 	mux := http.NewServeMux()
@@ -148,6 +158,17 @@ func main() {
 	mux.Handle("PATCH /api/v1/admin/users/{id}/activate",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ActivateUser))))
+	mux.HandleFunc("GET /api/v1/subastas", auctionHandler.List)
+	mux.HandleFunc("GET /api/v1/subastas/{id}", auctionHandler.Get)
+	mux.Handle("POST /api/v1/subastas",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleSeller)(http.HandlerFunc(auctionHandler.Create))))
+	mux.Handle("PATCH /api/v1/subastas/{id}/activate",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Activate))))
+	mux.Handle("PATCH /api/v1/subastas/{id}/close",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Close))))
 
 	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

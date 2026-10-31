@@ -27,6 +27,14 @@ func (m *MockRepo) Guardar(_ context.Context, s *domain.Subasta) error {
 	return nil
 }
 
+func (m *MockRepo) Listar(_ context.Context) ([]*domain.Subasta, error) {
+	result := make([]*domain.Subasta, 0, len(m.subastas))
+	for _, subasta := range m.subastas {
+		result = append(result, subasta)
+	}
+	return result, nil
+}
+
 // MockLock simula el lock distribuido de Redis.
 type MockLock struct{}
 
@@ -201,4 +209,3 @@ func TestProcesarPuja_BloqueoPorRiesgoAltoIA(t *testing.T) {
 		t.Errorf("se esperaba ErrRiesgoAltoIA, obtenido: %v", err)
 	}
 }
-

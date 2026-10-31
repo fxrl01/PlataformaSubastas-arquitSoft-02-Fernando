@@ -1,0 +1,58 @@
+package services_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/fxrl01/livebid-backend/internal/core/domain"
+	"github.com/fxrl01/livebid-backend/internal/core/services"
+)
+
+func TestAuctionCatalogCreatesPendingAuction(t *testing.T) {
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{}}
+	service := services.NuevoAuctionCatalogService(repo)
+	start := time.Now().Add(time.Hour)
+
+	auction, err := service.Crear(context.Background(), services.CrearSubastaCmd{
+		ID: "sub-1", VendedorID: "usr-seller", Titulo: "Obra",
+		PrecioBase: 100, Inicio: start, Cierre: start.Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if auction.Estado != domain.SubastaPendiente || auction.VendedorID != "usr-seller" {
+		t.Fatalf("unexpected auction: %+v", auction)
+	}
+}
+
+func TestAuctionCatalogRejectsInvalidDates(t *testing.T) {
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{}}
+	service := services.NuevoAuctionCatalogService(repo)
+	start := time.Now()
+
+	_, err := service.Crear(context.Background(), services.CrearSubastaCmd{
+		ID: "sub-1", VendedorID: "usr-seller", Titulo: "Obra",
+		PrecioBase: 100, Inicio: start, Cierre: start,
+	})
+	if err != domain.ErrSubastaInvalida {
+		t.Fatalf("expected invalid auction error, got %v", err)
+	}
+}
+
+func TestAuctionCatalogActivatesAndClosesAuction(t *testing.T) {
+	start := time.Now().Add(time.Hour)
+	auction := domain.NuevaSubasta("sub-1", "Obra", "", 100, start, start.Add(time.Hour))
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}}
+	service := services.NuevoAuctionCatalogService(repo)
+
+	if err := service.Activar(context.Background(), "sub-1"); err != nil {
+		t.Fatalf("activate failed: %v", err)
+	}
+	if err := service.Cerrar(context.Background(), "sub-1"); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	if auction.Estado != domain.SubastaCerrada {
+		t.Fatalf("expected closed auction, got %s", auction.Estado)
+	}
+}

@@ -25,4 +25,3 @@ func CalcularIncrementoMinimo(precioActual float64) float64 {
 		return 2_500
 	}
 }
-

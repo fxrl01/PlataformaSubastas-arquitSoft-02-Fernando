@@ -27,6 +27,7 @@ type Subasta struct {
 
 	// Descripcion contiene los detalles del bien o lote en subasta.
 	Descripcion string
+	VendedorID  string
 
 	// PrecioBase es el precio inicial de apertura establecido por el vendedor.
 	PrecioBase float64
@@ -166,4 +167,3 @@ func (s *Subasta) UltimaPuja() *Puja {
 	puja := s.Pujas[len(s.Pujas)-1]
 	return &puja
 }
-

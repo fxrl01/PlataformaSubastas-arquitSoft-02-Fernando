@@ -38,6 +38,7 @@ type UnlockFunc func() error
 type SubastaRepository interface {
 	ObtenerPorID(ctx context.Context, id string) (*Subasta, error)
 	Guardar(ctx context.Context, subasta *Subasta) error
+	Listar(ctx context.Context) ([]*Subasta, error)
 }
 
 // BidLockPort define el puerto para adquirir bloqueos atómicos distribuidos (ej. Redis SETNX).

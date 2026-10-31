@@ -28,4 +28,3 @@ func (e EstadoSubasta) EsAceptandoPujas() bool {
 func (e EstadoSubasta) String() string {
 	return string(e)
 }
-
