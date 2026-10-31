@@ -38,7 +38,7 @@ func (h *BidHandler) Place(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, domain.ErrSubastaNoEncontrada):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "auction not found"})
 		case errors.Is(err, domain.ErrPujaInferior), errors.Is(err, domain.ErrSubastaCerrada),
-			errors.Is(err, domain.ErrPostorIgual):
+			errors.Is(err, domain.ErrPostorIgual), errors.Is(err, domain.ErrGarantiaInsuficiente):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "bid rejected"})
 		case errors.Is(err, domain.ErrPujaConcurrente):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "auction changed, retry bid"})

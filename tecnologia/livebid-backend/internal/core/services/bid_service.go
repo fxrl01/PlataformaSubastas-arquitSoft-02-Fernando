@@ -10,11 +10,12 @@ import (
 )
 
 type AuctionBidService struct {
-	auctions domain.SubastaRepository
-	bids     domain.BidRepository
-	lock     domain.BidLockPort
-	notifier domain.BidNotifierPort
-	now      func() time.Time
+	auctions   domain.SubastaRepository
+	bids       domain.BidRepository
+	lock       domain.BidLockPort
+	notifier   domain.BidNotifierPort
+	guarantees domain.GuaranteeRepository
+	now        func() time.Time
 }
 
 type PlaceBidCmd struct {
@@ -45,6 +46,10 @@ func NewAuctionBidServiceWithNotifier(auctions domain.SubastaRepository, bids do
 	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, notifier: notifier, now: time.Now}
 }
 
+func NewAuctionBidServiceWithNotifierAndGuarantee(auctions domain.SubastaRepository, bids domain.BidRepository, lock domain.BidLockPort, notifier domain.BidNotifierPort, guarantees domain.GuaranteeRepository) *AuctionBidService {
+	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, notifier: notifier, guarantees: guarantees, now: time.Now}
+}
+
 func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidResponse, error) {
 	var unlock domain.UnlockFunc
 	var err error
@@ -58,6 +63,11 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 	subasta, err := s.auctions.ObtenerPorID(ctx, cmd.SubastaID)
 	if err != nil {
 		return BidResponse{}, err
+	}
+	if s.guarantees != nil {
+		if _, err := s.guarantees.FindActive(ctx, cmd.SubastaID, cmd.PostorID); err != nil {
+			return BidResponse{}, domain.ErrGarantiaInsuficiente
+		}
 	}
 	now := s.now()
 	precioAnterior := subasta.PrecioActual
