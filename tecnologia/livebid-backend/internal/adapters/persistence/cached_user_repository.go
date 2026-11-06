@@ -65,6 +65,13 @@ func (r *CachedUserRepository) FindByID(ctx context.Context, id string) (*domain
 	return &copyUser, nil
 }
 
+func (r *CachedUserRepository) ListUsers(ctx context.Context, status domain.UserStatus, role domain.UserRole) ([]*domain.User, error) {
+	if adminRepo, ok := r.inner.(domain.AdminUserRepository); ok {
+		return adminRepo.ListUsers(ctx, status, role)
+	}
+	return []*domain.User{}, nil
+}
+
 func (r *CachedUserRepository) Save(ctx context.Context, user *domain.User) error {
 	if err := r.inner.Save(ctx, user); err != nil {
 		return err
@@ -83,9 +90,30 @@ func (r *CachedUserRepository) UpdateStatus(ctx context.Context, id string, stat
 	return nil
 }
 
+func (r *CachedUserRepository) UpdateKYCAndStatus(ctx context.Context, id string, status domain.UserStatus, kycApproved bool) error {
+	if adminRepo, ok := r.inner.(domain.AdminUserRepository); ok {
+		if err := adminRepo.UpdateKYCAndStatus(ctx, id, status, kycApproved); err != nil {
+			return err
+		}
+		r.Invalidate(id)
+		return nil
+	}
+	return r.UpdateStatus(ctx, id, status)
+}
+
+func (r *CachedUserRepository) UpdateRole(ctx context.Context, id string, role domain.UserRole) error {
+	if adminRepo, ok := r.inner.(domain.AdminUserRepository); ok {
+		if err := adminRepo.UpdateRole(ctx, id, role); err != nil {
+			return err
+		}
+		r.Invalidate(id)
+		return nil
+	}
+	return nil
+}
+
 func (r *CachedUserRepository) Invalidate(id string) {
 	r.mu.Lock()
 	delete(r.entries, id)
 	r.mu.Unlock()
 }
-

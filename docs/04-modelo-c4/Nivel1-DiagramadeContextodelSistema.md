@@ -1,21 +1,14 @@
 # Nivel 1 · Diagrama de contexto del sistema — LiveBid
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
-> **Modelo:** C4 · Nivel 1 de 4 · **Versión:** 1.0  
+> **Modelo:** C4 · Nivel 1 de 4 · **Versión:** 3.0 (RBAC, Encargado Oficial, Web3 & IA Exponencial)  
 > **Estándar:** Software Design Description (SDD)
 
 ---
 
 ## 1. Objetivo
 
-Mostrar la **Plataforma LiveBid como una sola caja (caja negra)**: quiénes interactúan con ella y con qué sistemas externos se comunica. Es la vista de mayor nivel arquitectónico y la base para la sustentación ejecutiva del proyecto.
-
-| Aspecto | Descripción |
-|---|---|
-| **Pregunta que responde** | ¿Qué es LiveBid, quiénes son sus usuarios y con qué sistemas externos se integra? |
-| **Audiencia** | Docentes evaluadores, clientes de negocio, equipo de desarrollo y operaciones |
-| **Qué NO muestra** | Tecnologías internas, bases de datos, microservicios ni sockets específicos |
-| **Siguiente nivel** | `Nivel2-DiagramadeContenedores.md` |
+Representar la **Plataforma LiveBid** como una caja central y mostrar cómo interactúa con sus **cuatro perfiles de usuarios humanos (RBAC)**, **agentes autónomos delegados** y **sistemas externos** (IA generativa, red Web3/EVM, pasarelas fiduciarias y CDN de streaming).
 
 ---
 
@@ -23,60 +16,44 @@ Mostrar la **Plataforma LiveBid como una sola caja (caja negra)**: quiénes inte
 
 ```mermaid
 graph TD
-    classDef person fill:#08427B,stroke:#073B6F,color:#ffffff,stroke-width:2px;
-    classDef system fill:#1168BD,stroke:#0B4884,color:#ffffff,stroke-width:2px;
-    classDef external fill:#999999,stroke:#666666,color:#ffffff,stroke-width:2px;
+    classDef person fill:#08427B,stroke:#38BDF8,color:#ffffff,stroke-width:2px;
+    classDef system fill:#0F172A,stroke:#0EA5E9,color:#ffffff,stroke-width:3px;
+    classDef external fill:#334155,stroke:#94A3B8,color:#ffffff,stroke-width:2px;
+    classDef web3 fill:#3B0764,stroke:#C084FC,color:#ffffff,stroke-width:2px;
+    classDef ai fill:#312E81,stroke:#818CF8,color:#ffffff,stroke-width:2px;
 
-    Pujador["👤 Postor / Pujador<br><i>[Persona]</i><br>Compite en subastas en vivo, deposita garantías y realiza ofertas"]:::person
-    Vendedor["👤 Vendedor / Rematador<br><i>[Persona]</i><br>Publica lotes de bienes y supervisa los resultados de venta"]:::person
-    Martillero["👤 Martillero / Subastador<br><i>[Persona]</i><br>Modera la subasta en vivo, canta precios y baja el martillo"]:::person
-    Admin["👤 Administrador / Auditor<br><i>[Persona]</i><br>Gestiona usuarios, supervisa transacciones y audita trazabilidad"]:::person
+    Pujador["👤 Postor VIP / Inversionista (POSTOR)<br><i>[Persona]</i><br>Deposita garantía, puja en tiempo real, firma EIP-712, delega Agentes IA y verifica Merkle Proofs"]:::person
+    Martillero["🔨 Martillero / Encargado Oficial (MARTILLERO)<br><i>[Persona]</i><br>Responsable acreditado de la subasta: activa sala, canta conteo (EN_CONTEO) y adjudica el cierre"]:::person
+    Vendedor["🏛️ Vendedor / Consignante (VENDEDOR)<br><i>[Persona]</i><br>Publica el lote con ficha pericial/fotos, asigna al encargado y recibe la liquidación"]:::person
+    Admin["🛡️ Administrador / Auditor (ADMIN)<br><i>[Persona]</i><br>Aprueba registro y KYC, asigna roles RBAC, audita alertas de fraude IA y conmuta modelos LLM"]:::person
 
-    LiveBid["🖥️ LiveBid: Sistema de Subastas<br><i>[Sistema de Software]</i><br>Permite la subasta de bienes en tiempo real, validación atómica de pujas y gestión de custodia Zero Trust"]:::system
+    LiveBid["🖥️ LiveBid: High-Frequency Web3 & AI Auction Platform<br><i>[Sistema de Software]</i><br>Motor de subastas en tiempo real (<25ms) con Arquitectura Hexagonal en Go, custodia híbrida fiduciaria/Web3, pruebas Merkle y agentes autónomos IA"]:::system
 
-    Pasarela["🏛️ Pasarela de Pagos (Niubiz / Stripe)<br><i>[Sistema Externo]</i><br>Procesa retenciones de garantía (escrow) y liquidación de compras"]:::external
-    KYC["🆔 Servicio de Identidad (RENIEC / KYC)<br><i>[Sistema Externo]</i><br>Valida identidad legal y antecedentes de los postores"]:::external
-    Notif["📲 Servicio de Notificaciones (Twilio / SendGrid)<br><i>[Sistema Externo]</i><br>Envía alertas por SMS, WhatsApp y correo de adjudicación"]:::external
-    VideoLive["🎥 Proveedor de Video Streaming (Cloudflare Stream / AWS IVS)<br><i>[Sistema Externo]</i><br>Distribuye la señal de audio y video en vivo del martillero con ultra baja latencia"]:::external
+    GeminiAI["✨ Google Gemini Multi-Model AI<br><i>[Sistema Externo IA]</i><br>Evaluación predictiva de riesgo en tiempo real y análisis antifraude"]:::ai
+    EVMChain["⛓️ Red Blockchain EVM & Smart Contract Escrow<br><i>[Sistema Externo Web3]</i><br>Verificación de colateral on-chain, firmas EIP-712 y anclaje de MerkleRoot al cierre"]:::web3
+    Pasarela["💳 Pasarela Bancaria (Stripe / Niubiz)<br><i>[Sistema Externo]</i><br>Retención y captura de garantías fiduciarias"]:::external
+    KYC["🆔 Servicio de Identidad (RENIEC / KYC)<br><i>[Sistema Externo]</i><br>Validación de identidad legal para activación de cuentas"]:::external
+    VideoLive["🎥 Proveedor de Video Streaming (Cloudflare / AWS IVS)<br><i>[Sistema Externo]</i><br>Transmisión de video en vivo del martillero con baja latencia"]:::external
 
-    Pujador -->|Ingresa a salas, deposita garantía y emite pujas en vivo| LiveBid
-    Vendedor -->|Publica bienes con precio base y documentación legal| LiveBid
-    Martillero -->|Inicia cronómetros, modera pujas y ejecuta el martillazo final| LiveBid
-    Admin -->|Audita trazabilidad de pujas y autoriza desembolsos| LiveBid
+    Pujador -->|"Puja en vivo (WS/REST), delega Agente IA y audita Merkle"| LiveBid
+    Martillero -->|"Registra credenciales de encargado, inicia conteo y cierra"| LiveBid
+    Vendedor -->|"Registra subasta, sube DetallesLote y peritaje"| LiveBid
+    Admin -->|"Gestiona usuarios/roles RBAC, aprueba KYC y opera Router IA"| LiveBid
 
-    LiveBid -->|Congela depósitos de garantía y cobra al ganador| Pasarela
-    LiveBid -->|Verifica DNI / RUC y biometría de usuarios registrados| KYC
-    LiveBid -->|Notifica recordatorios de evento y comprobantes de compra| Notif
-    LiveBid -->|Sincroniza metadatos de precio con la señal de video| VideoLive
+    LiveBid -->|"Consulta score de riesgo (<150ms con Circuit Breaker)"| GeminiAI
+    LiveBid -->|"Verifica colateral y emite recibo de liquidación con MerkleRoot"| EVMChain
+    LiveBid -->|"Retiene y liquida garantías fiduciarias"| Pasarela
+    LiveBid -->|"Verifica identidad documental"| KYC
+    LiveBid -->|"Sincroniza estado de sala con stream en vivo"| VideoLive
 ```
 
 ---
 
-## 3. Personas (Usuarios del Sistema)
+## 3. Matriz de Actores y Responsabilidades de Contexto
 
-| Persona | Rol | Responsabilidad en LiveBid |
+| Actor | Rol (`UserRole`) | Responsabilidad en el Ecosistema LiveBid |
 |---|---|---|
-| **Postor / Pujador** | Usuario Comprador | Se registra, valida su identidad, constituye un depósito de garantía, ingresa a la sala en vivo y emite ofertas de puja. |
-| **Vendedor / Rematador** | Usuario Proveedor | Registra lotes de bienes con precio base, reserva, peritaje técnico y fecha de subasta. |
-| **Martillero / Subastador** | Operador en Vivo | Controla el ritmo del remate, valida el martillo 1, 2 y adjudicación final; puede pausar la sala ante contingencias. |
-| **Administrador / Auditor** | Operaciones y Cumplimiento | Resuelve controversias, audita logs inmutables de concurrencia y autoriza la liberación de garantías. |
-
----
-
-## 4. Sistemas Externos
-
-| Sistema Externo | Tipo | Función en la Arquitectura | Protocolo de Integración |
-|---|---|---|---|
-| **Pasarela de Pagos (Niubiz/Stripe)** | Pasarela Bancaria | Retención preventiva de fondos (*escrow*) y captura final del monto adjudicado. | HTTPS / REST (API firmada) |
-| **Servicio de Identidad (RENIEC / KYC)** | Validación Legal | Autenticación de identidad oficial de postores para evitar postores fantasmas. | HTTPS / REST |
-| **Servicio de Notificaciones** | Mensajería Externa | Envío de notificaciones transaccionales multicanal (Email, SMS, WhatsApp). | HTTPS / REST (Webhooks) |
-| **Proveedor de Streaming de Video** | Distribución Multimedia | Transmisión de video del martillero con latencia $< 1.5$ s hacia el frontend. | WebRTC / LL-HLS |
-
----
-
-## 5. Decisiones Arquitectónicas y Supuestos de Contexto
-
-1. **Aislamiento de Fondos (Zero Trust):** LiveBid **nunca almacena números de tarjeta ni dinero en cuentas propias**; las transacciones se realizan mediante preautorizaciones bancarias (*hold/capture*) directamente en la pasarela.
-2. **Sincronización Video vs. Datos:** El dato de la puja viaja por WebSocket independiente del video para asegurar que la puja se registre en $< 50$ ms aunque el video sufra microcortes de red.
-3. **Validez Legal del Timestamp:** La única fuente oficial de orden de llegada es el reloj sincronizado NTP del servidor de LiveBid, rechazando disputas basadas en la hora del teléfono o PC del postor.
-
+| **Postor / Pujador** | `POSTOR` | Se registra, obtiene aprobación KYC, congela su garantía en custodia, compite en vivo por WebSocket o delega su puja a un **Agente Autónomo de IA** con techo `max_cap`, y verifica criptográficamente el resultado mediante `MerkleProof`. |
+| **Martillero / Encargado** | `MARTILLERO` | Figura en la subasta como `EncargadoSubasta` (con número de licencia/registro oficial y contacto), conduce la sala (`ACTIVA` $\rightarrow$ `EN_CONTEO` $\rightarrow$ `CERRADA`) y da fe pública de la adjudicación. |
+| **Vendedor / Consignante** | `VENDEDOR` | Registra la subasta, carga la ficha técnica y pericial del bien (`DetallesLote`: categoría, reserva, ubicación, imágenes y certificado pericial) y designa al martillero encargado. |
+| **Administrador / Auditor** | `ADMIN` | Gobierna el ciclo de vida de usuarios (`PENDIENTE` $\rightarrow$ `ACTIVO`, `SUSPENDIDO`, `BLOQUEADO`), asigna roles (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`), supervisa alertas de *Wash Trading*/*Shill Bidding* y administra el `MultiModelRouter` de IA. |

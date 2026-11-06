@@ -1,30 +1,34 @@
 # Estilo Arquitectónico — LiveBid
 
-El estilo arquitectónico define la estructura global del sistema y cómo se organizan sus componentes a alto nivel.
+> **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
+> **Capa:** Arquitectura de Software · **Versión:** 3.0
 
-## Estilo Seleccionado: Capas + Orientación a Eventos
+---
 
-Debido a la naturaleza de tiempo real y alta concurrencia de la plataforma de subastas, un estilo puro de N-capas (donde las llamadas son síncronas de arriba hacia abajo) no es suficiente. Por lo tanto, hemos seleccionado un estilo híbrido:
+## 1. Estilo Seleccionado: Arquitectura Híbrida Hot/Cold Path + Orientada a Eventos (EDA) + Verificación Web3/IA
 
-1. **Arquitectura en Capas:** Para organizar las responsabilidades generales del sistema (Presentación, Negocio, Datos).
-2. **Arquitectura Orientada a Eventos (EDA):** Para gestionar el flujo crítico dentro de la capa de negocio (procesamiento de pujas, validación, evaluación de fraude y difusión).
+Debido a la naturaleza de alta frecuencia y competencia simultánea en los últimos segundos de una subasta en vivo, un estilo síncrono tradicional de N-capas resulta insuficiente. **LiveBid** combina cuatro estilos arquitectónicos complementarios:
 
-## Descripción de las Capas
+1. **Separación *Hot Path* / *Cold Path*:** El camino crítico de validación, bloqueo atómico (`SETNX`) y difusión en vivo opera en memoria a través de Go Goroutines y Redis Pub/Sub ($< 25\text{ ms}$), mientras que la auditoría forense y el análisis profundo de fraude se ejecutan sin bloquear a los espectadores.
+2. **Arquitectura Orientada a Eventos (EDA) con Multiplexación $O(1)$:** Cada puja aceptada o transición de estado emite un evento en el canal Redis de la subasta, el cual es consumido por una única suscripción compartida en el [`AuctionRoomHub`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/realtime/room_hub.go) y difundido a todos los sockets locales.
+3. **Arquitectura de Confianza Criptográfica (Web3 Trustless Overlay):** Integra verificación de firmas tipadas **EIP-712**, custodia en **Smart Contract Escrow** y construcción de **Árboles de Merkle (`MerkleRoot`)** sobre la cadena de hashes SHA-256 de PostgreSQL.
+4. **Arquitectura Resiliente Asistida por IA Exponencial:** Incorpora un enrutador multi-modelo (`MultiModelRouter`) protegido por `CircuitBreaker` ($150\text{ ms}$), telemetría antifraude asíncrona (`AsyncAnomalyDetector`) y delegación de **Agentes Autónomos de Puja**.
 
-| Capa | Responsabilidad | Componentes |
+---
+
+## 2. Descripción de las Zonas Arquitectónicas
+
+| Zona Arquitectónica | Responsabilidad Principal | Componentes Reales |
 |---|---|---|
-| **Presentación** | Manejar la interacción con el usuario (pujador, rematador, etc.), mostrar la interfaz y gestionar las conexiones en tiempo real. | App Web (React), API Gateway (REST + WebSocket), Broadcast Service (difusión WS). |
-| **Negocio (Orientada a Eventos)** | Contener la lógica central de las subastas, garantizar el orden, validar pujas y evaluar riesgos. La comunicación aquí es asíncrona mediante eventos. | RabbitMQ (Message Broker), Auction Engine, Trust Service. |
-| **Datos** | Persistir la información del sistema y proveer acceso rápido a datos en caliente. | PostgreSQL (datos transaccionales), Redis (precio actual en memoria). |
-| **Sistemas Externos** | Servicios de terceros que proveen funcionalidades especializadas que no desarrollamos internamente. | Pasarela de Pago, CDN de Streaming, Servicio de Notificaciones. |
+| **1. Edge, Gateway & Gobernanza RBAC** | Autenticar peticiones HTTP y handshakes WebSocket, verificar rol (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`) y estado KYC en caché ($< 0.05\text{ ms}$). | `RequireAuth`, `RequireRoles`, `CachedUserRepository`, `AuthHandler`. |
+| **2. Hot Path (Tiempo Real)** | Coordinar exclusión mutua por subasta, validar incrementos y *Anti-Sniping*, y difundir precios instantáneamente a miles de clientes. | `AuctionService`, `RedisLockAdapter` (`SETNX`), `RedisBidNotifier`, `AuctionRoomHub`. |
+| **3. Capa de IA Exponencial** | Evaluar riesgo de puja en $< 150\text{ ms}$ con fallback local, detectar colusión en segundo plano y ejecutar pujas delegadas a agentes autónomos. | `MultiModelRouter`, `CircuitBreaker`, `GeminiRiskAdapter`, `AsyncAnomalyDetector`, `AgentDelegationService`. |
+| **4. Capa Web3 Trustless** | Validar firmas criptográficas de billeteras EVM, verificar colateral on-chain y generar pruebas de inclusión Merkle. | `EIP712Verifier`, `EVMEscrowAdapter`, `Web3AuditService`. |
+| **5. Cold Path (Datos & Auditoría Forense)** | Garantizar persistencia transaccional ACID, bloqueo de fila `SELECT ... FOR UPDATE`, ficha del encargado/lote y cadena inmutable SHA-256. | PostgreSQL 16 (`PostgresAuctionRepository`, `PostgresBidRepository`, `PostgresEscrowRepository`). |
 
-## ¿Por qué este estilo?
+---
 
-1. **Desacoplamiento:** La orientación a eventos permite que el `Gateway` (Presentación) simplemente publique una intención de puja y responda rápido al usuario, mientras que el `Auction Engine` (Negocio) la procesa a su propio ritmo.
-2. **Escalabilidad (DA01):** El `Message Broker` actúa como un amortiguador (buffer) durante picos de pujas, evitando que la base de datos o el motor de subasta colapsen.
-3. **Integridad (DA02):** La cola de mensajes garantiza un orden estricto de llegada, crucial para determinar quién gana en una subasta.
-4. **Seguridad no bloqueante (DA06):** El `Trust Service` puede evaluar el riesgo de fraude consumiendo eventos en paralelo, sin añadir latencia excesiva al camino crítico de aceptación de pujas.
+## 3. Referencia Visual e Interactiva
 
-## Diagrama del Estilo Arquitectónico
-
-*(Ver `arquitectura/arquitectura-inicial.md` para el diagrama Mermaid y el enlace al diagrama interactivo Archify).*
+- **Diagrama Estático Mermaid:** Ver [`arquitectura-inicial.md`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/docs/02-arquitectura-software/arquitectura-inicial.md).
+- **Explorador Dinámico Interactivo (C4 Multinivel + Simulador de Flujos):** Abrir [`livebid-arquitectura.html`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/docs/02-arquitectura-software/livebid-arquitectura.html).

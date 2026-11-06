@@ -213,3 +213,48 @@ func TestAuctionCloseAnchorsMerkleRootOnChainAndWeb3AuditInspectsProof(t *testin
 		t.Fatalf("expected onchain receipt Merkle root to match report root, got %+v", report)
 	}
 }
+
+func TestAuctionCatalogUpdatesManagerLotDetailsAndStartsHammerCountdown(t *testing.T) {
+	start := time.Now().Add(time.Hour)
+	auction := domain.NuevaSubasta("sub-mgr", "Excavadora CAT 320", "Lote industrial", 25000, start, start.Add(2*time.Hour))
+	auction.Estado = domain.SubastaActiva
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{"sub-mgr": auction}}
+	catalog := services.NuevoAuctionCatalogService(repo)
+
+	updatedMgr, err := catalog.ActualizarEncargado(context.Background(), "sub-mgr", domain.EncargadoSubasta{
+		MartilleroID: "MART-01",
+		Nombre:       "Carlos Mendoza",
+		Cargo:        "Martillero Público Oficial",
+		Licencia:     "MART-REG-2026-099",
+		Contacto:     "cmendoza@livebid.pe",
+		Experiencia:  "Martillero Público con 15 años en liquidación de activos pesados.",
+	})
+	if err != nil {
+		t.Fatalf("update encargado failed: %v", err)
+	}
+	if updatedMgr.MartilleroID != "MART-01" || updatedMgr.Encargado.Licencia != "MART-REG-2026-099" {
+		t.Fatalf("unexpected manager details: %+v", updatedMgr)
+	}
+
+	updatedLot, err := catalog.ActualizarDetallesLote(context.Background(), "sub-mgr", domain.DetallesLote{
+		Categoria:              "MAQUINARIA_PESADA",
+		Ubicacion:              "Lima - Callao",
+		PrecioReserva:          32000,
+		InspeccionadoPor:       "Ing. Roberto Salazar (CIP 88412)",
+		CertificadoPeritajeURL: "https://docs.livebid.pe/tasaciones/cat320.pdf",
+		Especificaciones:       map[string]string{"motor": "C7.1 ACERT", "horas": "4100"},
+	})
+	if err != nil {
+		t.Fatalf("update lot details failed: %v", err)
+	}
+	if updatedLot.DetallesLote.PrecioReserva != 32000 {
+		t.Fatalf("unexpected lot details: %+v", updatedLot)
+	}
+
+	if err := catalog.IniciarConteo(context.Background(), "sub-mgr"); err != nil {
+		t.Fatalf("start countdown failed: %v", err)
+	}
+	if auction.Estado != domain.SubastaEnConteo {
+		t.Fatalf("expected EN_CONTEO state, got %s", auction.Estado)
+	}
+}

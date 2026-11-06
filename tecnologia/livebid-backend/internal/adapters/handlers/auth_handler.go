@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/fxrl01/livebid-backend/internal/adapters/security"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
@@ -76,9 +77,13 @@ func RequireRoles(roles ...domain.UserRole) func(http.Handler) http.Handler {
 }
 
 type registerRequest struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name          string          `json:"name"`
+	Email         string          `json:"email"`
+	Password      string          `json:"password"`
+	RequestedRole domain.UserRole `json:"rol_solicitado,omitempty"`
+	DocumentID    string          `json:"documento_identidad,omitempty"`
+	Phone         string          `json:"telefono,omitempty"`
+	WalletAddress string          `json:"wallet_address,omitempty"`
 }
 
 type loginRequest struct {
@@ -90,13 +95,28 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type updateRoleRequest struct {
+	Role domain.UserRole `json:"rol"`
+}
+
+type updateStatusRequest struct {
+	Status      domain.UserStatus `json:"estado"`
+	KYCApproved *bool             `json:"kyc_aprobado,omitempty"`
+}
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
 	user, err := h.auth.Register(r.Context(), services.RegisterUserCmd{
-		Name: request.Name, Email: request.Email, Password: request.Password,
+		Name:          request.Name,
+		Email:         request.Email,
+		Password:      request.Password,
+		RequestedRole: domain.UserRole(strings.ToUpper(strings.TrimSpace(string(request.RequestedRole)))),
+		DocumentID:    request.DocumentID,
+		Phone:         request.Phone,
+		WalletAddress: request.WalletAddress,
 	})
 	if err != nil {
 		writeAuthError(w, err)
@@ -145,11 +165,77 @@ func (h *AuthHandler) ActivateUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	statusFilter := domain.UserStatus(strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("estado"))))
+	roleFilter := domain.UserRole(strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("rol"))))
+
+	users, err := h.auth.ListUsers(r.Context(), statusFilter, roleFilter)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidRole) || errors.Is(err, domain.ErrInvalidUserStatus) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	var request updateRoleRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	role := domain.UserRole(strings.ToUpper(strings.TrimSpace(string(request.Role))))
+	updated, err := h.auth.UpdateUserRole(r.Context(), r.PathValue("id"), role)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidRole) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user role"})
+			return
+		}
+		if errors.Is(err, domain.ErrUserNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *AuthHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+	var request updateStatusRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	status := domain.UserStatus(strings.ToUpper(strings.TrimSpace(string(request.Status))))
+	updated, err := h.auth.UpdateUserStatus(r.Context(), r.PathValue("id"), status, request.KYCApproved)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidUserStatus) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user status"})
+			return
+		}
+		if errors.Is(err, domain.ErrUserNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	user, ok := CurrentUser(r)
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return
+	}
+	if h.auth != nil {
+		if profile, err := h.auth.GetProfile(r.Context(), user.ID); err == nil {
+			writeJSON(w, http.StatusOK, profile)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, user)
 }
@@ -173,7 +259,7 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	message := "internal server error"
 	switch {
 	case errors.Is(err, domain.ErrInvalidEmail), errors.Is(err, domain.ErrInvalidUser),
-		errors.Is(err, domain.ErrInvalidPassword):
+		errors.Is(err, domain.ErrInvalidPassword), errors.Is(err, domain.ErrInvalidRole):
 		status, message = http.StatusBadRequest, "invalid registration data"
 	case errors.Is(err, domain.ErrUserAlreadyExists):
 		status, message = http.StatusConflict, "user already registered"

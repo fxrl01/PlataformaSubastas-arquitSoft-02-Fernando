@@ -30,7 +30,7 @@ func main() {
 	log.Println(" Optimizado para AWS Free Tier (< 30 MB RAM, Latencia < 5ms)")
 	log.Println("=================================================================")
 
-	// 1. Conexión a PostgreSQL
+	// 1. Conexión a PostgreSQL y migración idempotente de esquema
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -44,6 +44,9 @@ func main() {
 	defer pool.Close()
 	if err := pool.Ping(context.Background()); err != nil {
 		log.Fatalf("ping database: %v", err)
+	}
+	if err := persistence.EnsureSchema(context.Background(), pool); err != nil {
+		log.Printf("advertencia en migración automática de esquema: %v", err)
 	}
 
 	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub)
@@ -83,13 +86,21 @@ func main() {
 	eip712Verifier := web3.NewEIP712Verifier(chainID, escrowContract)
 	blockchainEscrow := web3.NewEVMEscrowAdapter(chainID, escrowContract, os.Getenv("WEB3_RPC_URL"))
 
-	// 5. Servicios de Aplicación y Adaptadores HTTP / WebSocket
+	// 5. Servicios de Aplicación y Bootstrap Automático de Administrador
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
 		jwtIssuer,
 		persistence.NewPostgresRefreshTokenStore(pool),
 	)
+	adminEmail := envStr("ADMIN_BOOTSTRAP_EMAIL", "admin@livebid.pe")
+	adminPass := envStr("ADMIN_BOOTSTRAP_PASSWORD", "AdminLiveBid2026!")
+	if adminView, err := authService.BootstrapAdmin(context.Background(), "Administrador General LiveBid", adminEmail, adminPass); err != nil {
+		log.Printf("advertencia en bootstrap de admin: %v", err)
+	} else {
+		log.Printf("Cuenta ADMIN verificada y activa: %s (ID: %s)", adminView.Email, adminView.ID)
+	}
+
 	catalogService := services.NuevoAuctionCatalogServiceConGarantiasYNotificador(
 		auctionRepository,
 		guaranteeRepository,
@@ -136,16 +147,30 @@ func main() {
 		_, _ = w.Write([]byte(resp))
 	})
 
+	// Autenticación y Perfil
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
 	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.Me)))
+
+	// Gobernanza RBAC y Administración de Usuarios (Rol ADMIN)
+	mux.Handle("GET /api/v1/admin/users",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ListUsers))))
 	mux.Handle("PATCH /api/v1/admin/users/{id}/activate",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ActivateUser))))
+	mux.Handle("PATCH /api/v1/admin/users/{id}/role",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.UpdateUserRole))))
+	mux.Handle("PATCH /api/v1/admin/users/{id}/status",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.UpdateUserStatus))))
 	mux.Handle("PATCH /api/v1/admin/ia/modelo",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAdmin, domain.RoleAuctioneer)(http.HandlerFunc(agentAIHandler.SwitchModel))))
+
+	// Catálogo de Subastas, Encargado Oficial, Ficha del Lote y Ciclo de Vida
 	mux.HandleFunc("GET /api/v1/subastas", auctionHandler.List)
 	mux.HandleFunc("GET /api/v1/subastas/{id}", auctionHandler.Get)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/pujas", bidHistoryHandler.List)
@@ -153,13 +178,33 @@ func main() {
 	mux.HandleFunc("GET /api/v1/subastas/{id}/inteligencia-ia", agentAIHandler.IntelligenceReport)
 	mux.Handle("POST /api/v1/subastas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
-			handlers.RequireRoles(domain.RoleSeller)(http.HandlerFunc(auctionHandler.Create))))
+			handlers.RequireRoles(domain.RoleSeller, domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Create))))
+	mux.Handle("PUT /api/v1/subastas/{id}/encargado",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleSeller, domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.UpdateEncargado))))
+	mux.Handle("PUT /api/v1/subastas/{id}/detalles-lote",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleSeller, domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.UpdateDetallesLote))))
 	mux.Handle("PATCH /api/v1/subastas/{id}/activate",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Activate))))
+	mux.Handle("POST /api/v1/subastas/{id}/activar",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Activate))))
+	mux.Handle("PATCH /api/v1/subastas/{id}/countdown",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.StartCountdown))))
+	mux.Handle("POST /api/v1/subastas/{id}/conteo",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.StartCountdown))))
 	mux.Handle("PATCH /api/v1/subastas/{id}/close",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Close))))
+	mux.Handle("POST /api/v1/subastas/{id}/cerrar",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Close))))
+
+	// Pujas, Garantías y Agentes Autónomos de IA
 	mux.Handle("POST /api/v1/subastas/{id}/pujas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(bidHandler.Place))))
@@ -223,7 +268,7 @@ func main() {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, X-Web3-Wallet, X-Web3-Signature, X-Web3-Nonce, X-Web3-Deadline, X-AI-Agent-Mandate")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -254,6 +299,14 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func envStr(key, fallback string) string {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	return val
 }
 
 func resolvePublicDir() string {

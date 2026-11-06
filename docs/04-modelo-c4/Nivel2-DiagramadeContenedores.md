@@ -1,129 +1,71 @@
 # Nivel 2 · Diagrama de contenedores — LiveBid
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
-> **Modelo:** C4 · Nivel 2 de 4 · **Versión:** 2.0 (Startup Escalable & AWS Free Tier)  
-> **Estándar:** Software Design Description (SDD)  
-> **Stack Oficial:** Go (Golang) + Next.js + PostgreSQL + Redis + Gemini AI + AWS Free Tier
+> **Modelo:** C4 · Nivel 2 de 4 · **Versión:** 3.1 (Monolito Modular Go + 1 Sola Base de Datos PostgreSQL 16 + Pasarela Stripe & Servicios Externos)  
+> **Estándar:** Software Design Description (SDD)
 
 ---
 
 ## 1. Objetivo
 
-Abrir la caja «LiveBid» del nivel 1 y descomponerla en sus **contenedores ejecutables**: aplicaciones web, APIs de alto rendimiento, motores en tiempo real y almacenes de datos desacoplados que operan de forma independiente en la nube de **AWS (Free Tier Ready)**.
-
-| Aspecto | Descripción |
-|---|---|
-| **Pregunta que responde** | ¿Qué piezas de software desplegables componen LiveBid y cómo se comunican entre sí? |
-| **Audiencia** | Arquitectos de software, líderes técnicos, desarrolladores backend/frontend, DevOps/Cloud engineers |
-| **Qué es un contenedor en C4** | Una unidad ejecutable o de almacenamiento independiente (un frontend web, un servicio backend compilado, una base de datos) |
-| **Nivel anterior** | `Nivel1-DiagramadeContextodelSistema.md` |
-| **Siguiente nivel** | `Nivel3-Diagrama-de-Componentes.md` |
+Descomponer el sistema **LiveBid** en sus contenedores ejecutables dejando **100% claro para el desarrollo continuo** que:
+1. **PostgreSQL 16 es la ÚNICA Base de Datos del sistema (Single Source of Truth ACID)**.
+2. **Redis NO es una segunda base de datos**: es únicamente un **bus efímero en memoria** (semáforo de `1.5s` y difusión WebSocket) que incluso puede reemplazarse en desarrollo local por memoria nativa de Go.
+3. **Stripe API**, **Cloud Storage (S3/CDN) & KYC**, **Google Gemini IA** y **Web3** se conectan como servicios externos desacoplados.
 
 ---
 
-## 2. Diagrama de Contenedores (C4 Nivel 2 — Cloud & Go Core)
+## 2. Diagrama de Contenedores (C4 Nivel 2)
 
 ```mermaid
-graph TD
-    classDef person fill:#08427B,stroke:#073B6F,color:#ffffff,stroke-width:2px;
-    classDef frontend fill:#1E293B,stroke:#0F172A,color:#ffffff,stroke-width:2px;
-    classDef backend fill:#00ADD8,stroke:#007D9C,color:#000000,stroke-width:2px;
-    classDef db fill:#1C5A96,stroke:#0B4884,color:#ffffff,stroke-width:2px;
-    classDef redis fill:#DC382D,stroke:#9C1F17,color:#ffffff,stroke-width:2px;
-    classDef ai fill:#6366F1,stroke:#4338CA,color:#ffffff,stroke-width:2px;
-    classDef external fill:#64748B,stroke:#475569,color:#ffffff,stroke-width:2px;
-    classDef aws fill:#232F3E,stroke:#FF9900,color:#ffffff,stroke-width:2px;
+graph LR
+    classDef person fill:#08427B,stroke:#38BDF8,color:#ffffff,stroke-width:2px;
+    classDef frontend fill:#1E293B,stroke:#60A5FA,color:#ffffff,stroke-width:2px;
+    classDef backend fill:#082F49,stroke:#0EA5E9,color:#ffffff,stroke-width:2px;
+    classDef membus fill:#451A03,stroke:#F59E0B,color:#FEF3C7,stroke-width:2px;
+    classDef db fill:#052E16,stroke:#22C55E,color:#ffffff,stroke-width:3px;
+    classDef ext fill:#2E1065,stroke:#C084FC,color:#ffffff,stroke-width:2px;
 
-    Pujador["👤 Postor VIP / Pujador<br><i>[Inversionista / Coleccionista]</i>"]:::person
-    Martillero["👤 Martillero Oficial<br><i>[Operador de Subasta]</i>"]:::person
-
-    subgraph AWS["☁️ Boundary: Plataforma LiveBid (AWS Cloud - Free Tier Optimized)"]
-        Edge["🛡️ CloudFront CDN & Reverse Proxy<br><i>[AWS CloudFront / NGINX]</i><br>Terminación SSL, compresión Brotli, protección DDoS y ruteo HTTP / WSS"]:::aws
-
-        NextApp["🌐 Aplicación Web Frontend<br><i>[Contenedor: Next.js 15 / React 19]</i><br>Experiencia de usuario cinematográfica y exclusiva, SSR para catálogo SEO, audio en vivo y cliente WSS"]:::frontend
-
-        GoGateway["⚡ API Gateway & WebSocket Hub<br><i>[Contenedor: Go / Golang]</i><br>Terminación de WebSockets bidireccionales concurrentes, validación JWT, heartbeat y room manager"]:::backend
-
-        AuctionEngine["🔨 Auction & Core Engine<br><i>[Contenedor: Go / Golang - Clean Architecture]</i><br>Motor de subastas ultrarrápido (< 5ms): Anti-Sniping (extensión 15s), incrementos por tramo y adjudicación"]:::backend
-
-        RiskAssessor["🛡️ AI Risk Assessor & Circuit Breaker<br><i>[Contenedor: Go / Golang]</i><br>Evaluador de riesgo por postor con fallback en memoria en caso de latencia o corte de API externa"]:::backend
-
-        Redis["🧠 Cache & Concurrency Store<br><i>[Almacén: Redis 7.2 In-Memory]</i><br>Locks atómicos distribuidos (SETNX / Redlock), caché caliente de precio actual y canales Pub/Sub"]:::redis
-
-        Postgres["🗄️ Base de Datos Principal<br><i>[Almacén: PostgreSQL 16 - AWS RDS / EBS]</i><br>Persistencia relacional ACID: catálogo de bienes, peritajes, usuarios, garantías retenidas y actas legales"]:::db
-
-        Broker["📨 Message Broker<br><i>[Contenedor: RabbitMQ 3.13]</i><br>Cola asíncrona de eventos de dominio para auditoría legal, facturación diferida y notificaciones masivas"]:::backend
+    subgraph Actores["1. Usuarios del Sistema"]
+        Bidder["👤 Postor (POSTOR)"]:::person
+        Staff["🔨 Vendedor / Martillero / Admin"]:::person
     end
 
-    Pasarela["🏛️ Pasarela de Pagos & Custodia<br><i>[Stripe / Niubiz API]</i>"]:::external
-    GeminiAPI["🤖 Google Gemini 1.5 / 2.0 API<br><i>[Servicio Externo de Inteligencia Artificial]</i>"]:::ai
-    NotifService["📲 Servicio Externo Notificaciones<br><i>[AWS SES / WhatsApp Twilio]</i>"]:::external
+    subgraph LiveBidBoundary["2. Plataforma LiveBid (Entorno Docker / Cloud)"]
+        WebUI["🌐 Aplicación Web SPA<br><i>[HTML5 / JS / WebSockets]</i><br>Sala de subastas en vivo, pasarela de garantía Stripe, ficha del encargado/lote y panel Admin RBAC"]:::frontend
 
-    Pujador -->|Navega en sala exclusiva [HTTPS]| Edge
-    Martillero -->|Panel de control de remate [HTTPS]| Edge
+        GoServer["⚙️ Backend Core: Monolito Modular Hexagonal<br><i>[Contenedor Único: Go 1.23+ · :3000]</i><br>Contiene los 6 Módulos de Negocio:<br>M1. Usuarios/Roles · M2. Catálogo/Encargado/Lote<br>M3. Pagos Stripe · M4. Pujas en Vivo<br>M5. Copiloto IA · M6. Auditoría Legal"]:::backend
 
-    Edge -->|Ruta páginas y SSR| NextApp
-    Edge -->|Ruta conexiones socket WSS| GoGateway
-    Edge -->|Ruta API REST /api/v1| GoGateway
+        InMemoryBus(("⚡ Bus en Memoria (Redis / Go)<br><i>[NO ES BASE DE DATOS]</i><br>Solo Semáforo 1.5s (SETNX)<br>y Megáfono Pub/Sub WS")):::membus
 
-    NextApp -.->|Canal bidireccional en vivo [WSS]| GoGateway
+        PostgresDB[("🗄️ PostgreSQL 16 (ÚNICA BASE DE DATOS)<br><i>[Single Source of Truth ACID · :5432]</i><br>• usuarios & refresh_tokens<br>• subastas (Encargado + Lote JSONB)<br>• garantias (Hold Stripe)<br>• pujas & logs_auditoria (SHA-256)")]:::db
+    end
 
-    GoGateway -->|Despacha comandos de puja| AuctionEngine
-    GoGateway -->|Consulta catálogo y perfiles| AuctionEngine
+    subgraph Externos["3. Pasarela Stripe y Servicios Externos"]
+        StripeAPI["💳 Stripe API (Pasarela de Pagos)<br><i>PaymentIntents Hold, Capture, Cancel & Webhooks</i>"]:::ext
+        CloudKYC["☁️ Cloud Storage (S3/CDN) & KYC<br><i>Fotos del lote, PDF peritaje y validación DNI/SUNARP</i>"]:::ext
+        GeminiCloud["🤖 Google Gemini API (IA)<br><i>Scoring de riesgo con Circuit Breaker (<150ms)</i>"]:::ext
+        Web3Network["⛓️ Pasarela Web3 Base L2 (Opcional)<br><i>Firmas EIP-712 y Sello Merkle</i>"]:::ext
+    end
 
-    AuctionEngine -->|Locks atómicos y consulta precio caliente| Redis
-    AuctionEngine -->|Persistencia transaccional duradera (ACID)| Postgres
-    AuctionEngine -->|Encola eventos de dominio aprobados| Broker
-    AuctionEngine -->|Verifica riesgo crediticio / comportamiento| RiskAssessor
+    Bidder & Staff -->|"HTTPS REST + WSS"| WebUI
+    WebUI -->|"REST /api/v1/* + WS /ws"| GoServer
 
-    RiskAssessor -->|Análisis predictivo de patrones de riesgo| GeminiAPI
-    AuctionEngine -->|Congela / captura depósitos en garantía| Pasarela
+    GoServer <-->|"Lock 1.5s + Broadcast Sala"| InMemoryBus
+    GoServer ==>|"Lectura y Escritura Persistente ACID"| PostgresDB
 
-    Broker -->|Consume eventos para auditoría y facturas| AuctionEngine
-    Broker -->|Dispara alertas de adjudicación| NotifService
-
-    Redis -.->|Broadcast Pub/Sub a instancias de socket| GoGateway
+    GoServer <-->|"Retención / Cobro / Webhooks"| StripeAPI
+    GoServer <-->|"URLs PDF/Fotos y Verificación"| CloudKYC
+    GoServer -.->|"Consulta con Fallback Local"| GeminiCloud
+    GoServer -.->|"Recibo Cripto Opcional"| Web3Network
 ```
 
 ---
 
-## 3. Catálogo de Contenedores
+## 3. Catálogo de Contenedores y Claridad Operativa
 
-| Contenedor | Tecnología | Responsabilidad Principal | Consumo de Recursos en AWS Free Tier | Persistencia / Estado |
-|---|---|---|---|---|
-| **Aplicación Web Frontend** | Next.js 15, React 19, TypeScript, Vanilla/Tailwind CSS | Interfaz cinematográfica de alta gama, catálogo con SSR para indexación SEO, reproducción de audio dinámico y cliente WebSocket para pujas en vivo. | ~120 MB RAM (o desplegado serverless en Vercel / AWS Amplify Free Tier) | Stateless (estado reactivo en cliente con Zustand / React State). |
-| **API Gateway & WebSocket Hub** | Go (Golang 1.23+), Gorilla / Coder WebSocket | Mantiene abiertas miles de conexiones WebSocket concurrentes con cero sobrecarga, gestiona autenticación JWT y rutea tráfico REST. | **~15 MB – 25 MB RAM** (ultra liviano) | En memoria volátil de proceso (mapa concurrente seguro con `sync.RWMutex`). |
-| **Auction & Core Engine** | Go (Golang 1.23+), Clean Architecture | Ejecuta las reglas de negocio estrictas: validación de tramos de puja, extensión automática anti-sniping, verificación de garantías y martillazo. | **~20 MB – 30 MB RAM** | Desacoplado: delega a Redis y PostgreSQL. |
-| **AI Risk Assessor & Circuit Breaker** | Go (Golang 1.23+) + Gemini SDK | Filtro de confianza y evaluación de riesgo en tiempo de puja. Incorpora Circuit Breaker para conmutar a reglas heurísticas locales si la API de IA supera los 150 ms. | ~10 MB RAM | Stateless con métricas en memoria. |
-| **In-Memory Store (Redis)** | Redis 7.2 | Proporciona locks atómicos distribuidos (`SETNX`), almacenamiento de la oferta líder en memoria ($< 1$ ms) y canal Pub/Sub multihilo. | ~30 MB – 50 MB RAM | En memoria con snapshot periódico RDB. |
-| **Base de Datos (PostgreSQL)** | PostgreSQL 16 (AWS RDS Free Tier db.t3.micro o contenedor) | Almacén de verdad contable y legal con transacciones ACID, constraints de integridad y tablas históricas particionadas. | Capa gratuita AWS RDS (20 GB SSD) | Disco persistente con backups automáticos diarios. |
-| **Message Broker (RabbitMQ)** | RabbitMQ 3.13 / Amazon SQS | Desacopla tareas asíncronas pesadas (emisión de actas forenses, facturación y notificaciones) para no frenar la sala en vivo. | ~60 MB – 80 MB RAM | Colas duraderas persistidas en disco. |
-
----
-
-## 4. Por qué esta arquitectura es viable en AWS Free Tier
-
-Una de las observaciones críticas de la evaluación arquitectónica era la viabilidad de recursos y costos. Desplegar un clúster de microservicios en Node.js sobre una instancia `t2.micro` o `t3.micro` (1 GB de RAM) colapsa rápidamente por OOM (Out Of Memory).
-
-Al adoptar **Go (Golang)**:
-1. **Consumo total del backend Go:** Menos de **60 MB de RAM**, dejando más del 80% de la memoria del servidor disponible para Redis y el sistema operativo.
-2. **Latencia Sub-milisegundo:** El motor de subastas en Go procesa el martillazo y la puja en $< 3$ ms, cumpliendo con los estándares de subastas de alta frecuencia.
-3. **Escalabilidad Horizontal:** Si la startup crece, cada contenedor Go se empaqueta en imágenes Docker de apenas **18 MB** (utilizando `scratch` o `alpine`), listas para escalar en AWS ECS Fargate sin cambios de código.
-
----
-
-## 5. Flujos de Datos y Protocolos de Comunicación
-
-### A. Flujo en Tiempo Real (Hot Path — Subastas en Vivo)
-1. El postor presiona "Ofertar $55,000" en la interfaz **Next.js**.
-2. La oferta viaja por `WSS` al **WebSocket Hub (Go)** autenticada con JWT.
-3. El **Auction Engine (Go)** adquiere un lock atómico en **Redis** en $pprox 1$ ms para evitar colisiones.
-4. Se validan las reglas de dominio: incremento mínimo, extensión de 15s si es anti-sniping y garantía activa.
-5. Se actualiza el precio en **Redis** y se publica un evento en el canal Pub/Sub.
-6. El **WebSocket Hub** difunde el nuevo precio a todos los postores conectados en $< 25$ ms.
-7. Se libera el lock en **Redis** y se emite el evento al Broker para persistencia asíncrona.
-
-### B. Flujo Transaccional Frío (Cold Path — Persistencia & Auditoría)
-1. El worker asíncrono consume el evento de puja confirmada desde el **Broker**.
-2. Escribe el registro forense en **PostgreSQL** con timestamp de alta precisión y hash de integridad.
-3. El hilo en vivo jamás se bloquea por operaciones de disco en la base de datos relacional.
+| Contenedor (`docker-compose.yml`) | Rol Arquitectónico | ¿Guarda Datos Persistentes? | Explicación para Desarrollo Continuo |
+| :--- | :--- | :---: | :--- |
+| **`livebid-api-server` (`:3000`)** | **Monolito Modular en Go 1.23+ + SPA Web** | No (Stateless) | Un solo binario que aloja los **6 módulos de negocio** y sirve el frontend. Cero complejidad de múltiples servidores. |
+| **`livebid-postgres` (`:5432`)** | **ÚNICA BASE DE DATOS (`PostgreSQL 16`)** | **SÍ (100% ACID)** | Aquí vive toda la información del sistema (`usuarios`, `subastas`, `garantias`, `pujas`, `logs_auditoria`). |
+| **`livebid-redis` (`:6379`)** | **Coordinador Efímero en Memoria** | **NO (0% Tablas)** | **No es una segunda base de datos.** Solo actúa como semáforo de `1.5s` durante una puja y canal de avisos en vivo. Si no está presente en local, Go usa memoria interna automáticamente. |

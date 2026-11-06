@@ -36,6 +36,24 @@ func (r *countingUserRepo) UpdateStatus(_ context.Context, _ string, status doma
 	return nil
 }
 
+func (r *countingUserRepo) ListUsers(_ context.Context, _ domain.UserStatus, _ domain.UserRole) ([]*domain.User, error) {
+	if r.user == nil {
+		return nil, nil
+	}
+	return []*domain.User{r.user}, nil
+}
+
+func (r *countingUserRepo) UpdateRole(_ context.Context, _ string, role domain.UserRole) error {
+	r.user.Role = role
+	return nil
+}
+
+func (r *countingUserRepo) UpdateKYCAndStatus(_ context.Context, _ string, status domain.UserStatus, kycApproved bool) error {
+	r.user.Status = status
+	r.user.KYCApproved = kycApproved
+	return nil
+}
+
 func TestCachedUserRepositoryCachesFindByIDAndInvalidatesOnUpdateStatus(t *testing.T) {
 	now := time.Now()
 	user, _ := domain.NewUser("usr-1", "Fernando", "f@livebid.pe", "hash", now)
@@ -62,6 +80,18 @@ func TestCachedUserRepositoryCachesFindByIDAndInvalidatesOnUpdateStatus(t *testi
 	}
 	if updated.Status != domain.UserActive || inner.findIDHits != 2 {
 		t.Fatalf("expected cache invalidation after status change, status=%s hits=%d", updated.Status, inner.findIDHits)
+	}
+
+	if err := cached.UpdateRole(context.Background(), "usr-1", domain.RoleAuctioneer); err != nil {
+		t.Fatalf("update role failed: %v", err)
+	}
+
+	updatedRole, err := cached.FindByID(context.Background(), "usr-1")
+	if err != nil {
+		t.Fatalf("find after update role failed: %v", err)
+	}
+	if updatedRole.Role != domain.RoleAuctioneer || inner.findIDHits != 3 {
+		t.Fatalf("expected cache invalidation after role change, role=%s hits=%d", updatedRole.Role, inner.findIDHits)
 	}
 }
 

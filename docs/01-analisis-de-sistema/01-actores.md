@@ -1,23 +1,34 @@
-# Actores del sistema — LiveBid (nombre de trabajo)
+# Actores del sistema — LiveBid
 
-## Actores humanos
+> **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real de Alta Frecuencia (Web3 & IA Exponencial)  
+> **Capa:** Análisis de Sistema · **Versión:** 3.0
 
-| Actor | ¿Qué necesita realizar? |
-|---|---|
-| **Pujador / Espectador** | Explorar subastas activas y programadas, unirse a la transmisión en vivo, enviar pujas en tiempo real, ver el precio actual, consultar su historial de pujas y pagos, recibir el resultado del lote. |
-| **Rematador / Organizador del evento** | Crear una subasta y elegir su formato (ascendente, descendente, sellada, benéfica), registrar los lotes, iniciar y cerrar la transmisión en vivo, cerrar cada lote manualmente o por temporizador. |
-| **Vendedor / Consignante** | Registrar el ítem o lote a subastar (descripción, fotos, precio de reserva) y recibir el pago una vez cerrada la venta. Puede coincidir con el rematador en eventos pequeños, o ser un tercero en un modelo de consignación. |
-| **Administrador de la plataforma** | Gestionar cuentas de usuarios y rematadores, revisar alertas de fraude, resolver disputas sobre el resultado de una puja, suspender cuentas, generar reportes. |
+---
 
-## Sistemas externos
+## 1. Actores Humanos y Agentes Autónomos (RBAC)
 
-| Sistema externo | ¿Qué necesita realizar? |
-|---|---|
-| **Pasarela de pagos** (Stripe / PayPal) | Procesar el cobro al pujador ganador y la liquidación al vendedor. |
-| **Proveedor de streaming / CDN de video** (Cloudflare Stream, Mux o AWS IVS) | Distribuir la señal de video en vivo a todos los espectadores conectados. |
-| **Servicio de notificaciones** (email / push) | Notificar resultados de puja, recordatorios de evento y confirmaciones de pago. |
-| **Servicio de verificación de identidad (KYC)** | Validar la identidad de un pujador antes de habilitarlo a pujar por encima de un monto umbral. |
+| Actor | Rol en Sistema (`domain.UserRole`) | ¿Qué necesita realizar en LiveBid? |
+|---|---|---|
+| **Pujador / Inversionista VIP** | `POSTOR` | Registrarse y pasar verificación KYC (`ACTIVO`), congelar garantía fiduciaria o Web3 Escrow, explorar subastas activas y sus fichas periciales, unirse a la transmisión y sala en vivo (WebSocket), emitir pujas firmadas (HTTP/WS o EIP-712), delegar un **Agente Autónomo de IA** con techo presupuestario (`max_cap`), y auditar sus pruebas criptográficas Merkle. |
+| **Martillero / Encargado Oficial** | `MARTILLERO` | Ser asignado como responsable legal del evento (`EncargadoSubasta`: nombre, número de colegiatura/registro SUNARP, contacto), activar la subasta en vivo, iniciar el conteo de martillo (`EN_CONTEO`), adjudicar el cierre (`CERRADA`) y supervisar la telemetría de la sala en tiempo real. |
+| **Vendedor / Consignante** | `VENDEDOR` | Crear la subasta y subir la **ficha técnica y multimedia del lote** (`DetallesLote`: categoría, ubicación custodiada, precio base, precio de reserva, galería de fotos, certificado de peritaje oficial y especificaciones técnicas), asignar al encargado/martillero y recibir la liquidación atómica al cierre. |
+| **Administrador / Auditor de Plataforma** | `ADMIN` | Aprobar el registro y KYC de usuarios (`PENDIENTE` $\rightarrow$ `ACTIVO`), asignar o revocar roles (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`), suspender o bloquear cuentas ante fraude, monitorear las alertas del **Detector Asíncrono de Anomalías IA**, cambiar en caliente el modelo del **Multi-Model AI Router** y verificar la integridad forense (cadena SHA-256 y raíz de Merkle). |
+| **Agente Autónomo de Puja (IA)** | Delegado por `POSTOR` | Operar dentro del motor de subastas en representación de un postor verificado, ejecutando estrategias (`CONSERVADORA`, `EQUILIBRADA`, `SNIPER_ANTI_EXTENSION`) sin exceder jamás el límite criptográfico autorizado ni competir contra su propio mandante. |
 
-## Nota de diseño
+---
 
-A diferencia de un marketplace tradicional (compra asíncrona, un solo precio fijo), aquí aparecen dos actores que no existen en ese modelo — el **Rematador** y el **Vendedor** como roles potencialmente distintos — y el sistema debe funcionar en una ventana de tiempo real, no asíncrona. Esta diferencia ya condiciona el análisis desde las historias de usuario.
+## 2. Sistemas Externos e Infraestructura Descentralizada
+
+| Sistema Externo | Categoría | ¿Qué realiza en la arquitectura? |
+|---|---|---|
+| **Google Gemini AI (Multi-Model Engine)** | Inteligencia Artificial Exponencial | Evalúa el riesgo crediticio y de comportamiento en tiempo real (protegido por *Circuit Breaker* de 150 ms) y alimenta el radar asíncrono contra *Wash Trading*, *Shill Bidding* y *Bot Sniping*. |
+| **Smart Contract Escrow & Red EVM** | Web3 / Blockchain Trustless | Verifica firmas criptográficas tipadas **EIP-712**, retiene colateral en contratos inteligentes (`EVMEscrowAdapter`) y ancla la **Raíz de Merkle (`MerkleRoot`)** de todas las pujas al cierre de la subasta. |
+| **Pasarela de Pagos Fiduciaria (Stripe / Niubiz)** | Custodia Financiera Tradicional | Procesa retenciones preventivas (*hold*) y capturas finales (*capture*) de garantías en moneda fiduciaria mediante el puerto `EscrowPort`. |
+| **Proveedor de Video Streaming (Cloudflare Stream / AWS IVS)** | Distribución Multimedia | Distribuye la señal de video en vivo del martillero con latencia sub-segundo, desacoplada del canal WebSocket de precios. |
+| **Servicio de Identidad (RENIEC / KYC) y Notificaciones** | Cumplimiento y Mensajería | Verifica documentos de identidad de postores/vendedores/martilleros y envía notificaciones transaccionales de adjudicación. |
+
+---
+
+## 3. Nota de Diseño Arquitectónico
+
+A diferencia de un marketplace convencional (compra asíncrona a precio fijo), **LiveBid** modela explícitamente cuatro roles operativos diferenciados (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`) más la figura de **Agentes Autónomos de IA** bajo supervisión humana. El **Vendedor** aporta el activo y su peritaje técnico (`DetallesLote`), el **Martillero / Encargado** aporta la fe pública y conducción del remate (`EncargadoSubasta`), el **Administrador** gobierna la seguridad Zero-Trust (KYC, RBAC y enrutamiento de modelos IA), y el **Postor** compite en ventanas de milisegundos con respaldo criptográfico Web3.

@@ -47,13 +47,16 @@ type AuctionCatalogService struct {
 }
 
 type CrearSubastaCmd struct {
-	ID          string
-	VendedorID  string
-	Titulo      string
-	Descripcion string
-	PrecioBase  float64
-	Inicio      time.Time
-	Cierre      time.Time
+	ID           string
+	VendedorID   string
+	MartilleroID string
+	Titulo       string
+	Descripcion  string
+	PrecioBase   float64
+	Inicio       time.Time
+	Cierre       time.Time
+	Encargado    *domain.EncargadoSubasta
+	DetallesLote *domain.DetallesLote
 }
 
 func NuevoAuctionCatalogService(repo domain.SubastaRepository) *AuctionCatalogService {
@@ -81,6 +84,47 @@ func (s *AuctionCatalogService) Crear(ctx context.Context, cmd CrearSubastaCmd) 
 	}
 	subasta := domain.NuevaSubasta(cmd.ID, cmd.Titulo, cmd.Descripcion, cmd.PrecioBase, cmd.Inicio, cmd.Cierre)
 	subasta.VendedorID = cmd.VendedorID
+	subasta.MartilleroID = cmd.MartilleroID
+	if cmd.Encargado != nil {
+		if err := subasta.AsignarEncargado(*cmd.Encargado); err != nil {
+			return nil, err
+		}
+	}
+	if cmd.DetallesLote != nil {
+		if err := subasta.ActualizarDetallesLote(*cmd.DetallesLote); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.repo.Guardar(ctx, subasta); err != nil {
+		return nil, err
+	}
+	return subasta, nil
+}
+
+// ActualizarEncargado asigna o actualiza los detalles del martillero/encargado oficial de la subasta.
+func (s *AuctionCatalogService) ActualizarEncargado(ctx context.Context, id string, encargado domain.EncargadoSubasta) (*domain.Subasta, error) {
+	subasta, err := s.Obtener(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := subasta.AsignarEncargado(encargado); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Guardar(ctx, subasta); err != nil {
+		return nil, err
+	}
+	return subasta, nil
+}
+
+// ActualizarDetallesLote sube o actualiza la ficha técnica, pericial y multimedia del bien subastado.
+func (s *AuctionCatalogService) ActualizarDetallesLote(ctx context.Context, id string, detalles domain.DetallesLote) (*domain.Subasta, error) {
+	subasta, err := s.Obtener(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := subasta.ActualizarDetallesLote(detalles); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Guardar(ctx, subasta); err != nil {
 		return nil, err
 	}
@@ -104,6 +148,17 @@ func (s *AuctionCatalogService) Activar(ctx context.Context, id string) error {
 		return err
 	}
 	if err := subasta.Activar(); err != nil {
+		return err
+	}
+	return s.repo.Guardar(ctx, subasta)
+}
+
+func (s *AuctionCatalogService) IniciarConteo(ctx context.Context, id string) error {
+	subasta, err := s.Obtener(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := subasta.IniciarConteo(); err != nil {
 		return err
 	}
 	return s.repo.Guardar(ctx, subasta)

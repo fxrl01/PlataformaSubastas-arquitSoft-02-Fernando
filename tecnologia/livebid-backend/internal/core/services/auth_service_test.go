@@ -43,6 +43,36 @@ func (r *authUserRepo) UpdateStatus(_ context.Context, id string, status domain.
 	return nil
 }
 
+func (r *authUserRepo) ListUsers(_ context.Context, statusFilter domain.UserStatus, roleFilter domain.UserRole) ([]*domain.User, error) {
+	if r.user == nil {
+		return nil, nil
+	}
+	if roleFilter != "" && r.user.Role != roleFilter {
+		return nil, nil
+	}
+	if statusFilter != "" && r.user.Status != statusFilter {
+		return nil, nil
+	}
+	return []*domain.User{r.user}, nil
+}
+
+func (r *authUserRepo) UpdateRole(_ context.Context, id string, role domain.UserRole) error {
+	if r.user == nil || r.user.ID != id {
+		return domain.ErrUserNotFound
+	}
+	r.user.Role = role
+	return nil
+}
+
+func (r *authUserRepo) UpdateKYCAndStatus(_ context.Context, id string, status domain.UserStatus, kycApproved bool) error {
+	if r.user == nil || r.user.ID != id {
+		return domain.ErrUserNotFound
+	}
+	r.user.Status = status
+	r.user.KYCApproved = kycApproved
+	return nil
+}
+
 type authHasher struct{}
 
 func (authHasher) Hash(password string) (string, error) {
@@ -181,5 +211,39 @@ func TestActivateUserChangesStatus(t *testing.T) {
 	}
 	if repo.user.Status != domain.UserActive {
 		t.Fatalf("expected active status, got %s", repo.user.Status)
+	}
+}
+
+func TestBootstrapAdminCreatesActiveAdminAndUpdatesRoleAndKYC(t *testing.T) {
+	repo := &authUserRepo{}
+	service := services.NewAuthService(repo, authHasher{}, authTokenIssuer{})
+
+	if _, err := service.BootstrapAdmin(context.Background(), "Admin Root", "admin@livebid.pe", "AdminLiveBid2026!"); err != nil {
+		t.Fatalf("bootstrap admin failed: %v", err)
+	}
+	if repo.user == nil || repo.user.Role != domain.RoleAdmin || repo.user.Status != domain.UserActive || !repo.user.KYCApproved {
+		t.Fatalf("unexpected bootstrapped admin: %+v", repo.user)
+	}
+
+	view, err := service.UpdateUserRole(context.Background(), repo.user.ID, domain.RoleAuctioneer)
+	if err != nil {
+		t.Fatalf("update role failed: %v", err)
+	}
+	if view.Role != domain.RoleAuctioneer {
+		t.Fatalf("expected role MARTILLERO, got %s", view.Role)
+	}
+
+	kycFalse := false
+	statusView, err := service.UpdateUserStatus(context.Background(), repo.user.ID, domain.UserSuspended, &kycFalse)
+	if err != nil {
+		t.Fatalf("update status failed: %v", err)
+	}
+	if statusView.Status != domain.UserSuspended || statusView.KYCApproved {
+		t.Fatalf("expected suspended status and kyc=false, got %+v", statusView)
+	}
+
+	users, err := service.ListUsers(context.Background(), domain.UserSuspended, domain.RoleAuctioneer)
+	if err != nil || len(users) != 1 {
+		t.Fatalf("expected 1 listed user, err=%v len=%d", err, len(users))
 	}
 }

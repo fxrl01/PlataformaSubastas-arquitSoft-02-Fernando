@@ -12,6 +12,14 @@ type UserRepository interface {
 	UpdateStatus(ctx context.Context, id string, status UserStatus) error
 }
 
+// AdminUserRepository extiende UserRepository con capacidades administrativas de RBAC y KYC.
+type AdminUserRepository interface {
+	UserRepository
+	ListUsers(ctx context.Context, status UserStatus, role UserRole) ([]*User, error)
+	UpdateRole(ctx context.Context, id string, role UserRole) error
+	UpdateKYCAndStatus(ctx context.Context, id string, status UserStatus, kycApproved bool) error
+}
+
 type PasswordHasher interface {
 	Hash(password string) (string, error)
 	Compare(hash, password string) error

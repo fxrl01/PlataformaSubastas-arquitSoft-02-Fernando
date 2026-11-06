@@ -1,396 +1,119 @@
 {
-  "schema_version": 1,
-  "diagram_type": "architecture",
-  "meta": {
-    "title": "LiveBid — Arquitectura de Subastas en Tiempo Real",
-    "quality_profile": "showcase",
-    "output": "rematix-arquitectura.html",
-    "views": [
-      {
-        "id": "flujo-puja",
-        "label": "Flujo de una puja",
-        "focus": [
-          "pujador",
-          "gateway",
-          "broker",
-          "auction-engine",
-          "redis"
-        ],
-        "note": "Desde que el pujador envía una puja hasta la validación y persistencia."
-      },
-      {
-        "id": "deteccion-fraude",
-        "label": "Detección de fraude",
-        "focus": [
-          "broker",
-          "trust-service",
-          "postgres"
-        ],
-        "note": "El trust-service evalúa la confianza del pujador en paralelo."
-      },
-      {
-        "id": "integraciones",
-        "label": "Integraciones externas",
-        "focus": [
-          "auction-engine",
-          "pasarela-pago",
-          "cdn-streaming",
-          "notificaciones"
-        ],
-        "note": "Pagos, video en vivo y notificaciones."
-      }
-    ]
+  "metadata": {
+    "system": "LiveBid — Plataforma de Subastas en Tiempo Real",
+    "version": "3.1.0",
+    "style": "Monolito Modular Hexagonal (Go 1.23+) · 1 Sola Base de Datos (PostgreSQL 16) · Pasarela Stripe & Servicios Externos",
+    "updated_at": "2026-11-06"
   },
-  "components": [
+  "architecture_principles": [
     {
-      "id": "pujador",
-      "type": "external",
-      "label": "Pujador",
-      "sublabel": "Navegador",
-      "pos": [
-        40,
-        40
-      ],
-      "size": [
-        120,
-        50
-      ]
+      "id": "P1",
+      "title": "Una Sola Base de Datos (PostgreSQL 16)",
+      "summary": "PostgreSQL 16 es la única base de datos del proyecto. Redis NO se usa como segunda base de datos; solo actúa como semáforo temporal de 1.5s y megáfono WebSocket en memoria."
     },
     {
-      "id": "rematador",
-      "type": "external",
-      "label": "Rematador",
-      "sublabel": "Organizador",
-      "pos": [
-        250,
-        40
-      ],
-      "size": [
-        130,
-        50
-      ]
+      "id": "P2",
+      "title": "Monolito Modular para Desarrollo Continuo",
+      "summary": "Un solo binario en Go dividido internamente en 6 módulos claros. Sin complejidad de microservicios ni múltiples repositorios."
     },
     {
-      "id": "vendedor",
-      "type": "external",
-      "label": "Vendedor",
-      "sublabel": "Consignante",
-      "pos": [
-        470,
-        40
-      ],
-      "size": [
-        120,
-        50
-      ]
-    },
-    {
-      "id": "admin",
-      "type": "external",
-      "label": "Administrador",
-      "sublabel": "Gestión",
-      "pos": [
-        680,
-        40
-      ],
-      "size": [
-        140,
-        50
-      ]
-    },
-    {
-      "id": "gateway",
-      "type": "backend",
-      "label": "API Gateway",
-      "sublabel": "Go · REST + WS",
-      "pos": [
-        250,
-        200
-      ],
-      "size": [
-        160,
-        56
-      ],
-      "tag": "Auth + WS"
-    },
-    {
-      "id": "broker",
-      "type": "messagebus",
-      "label": "RabbitMQ",
-      "sublabel": "Message Broker",
-      "pos": [
-        250,
-        380
-      ],
-      "size": [
-        160,
-        56
-      ],
-      "tag": "Cola por subasta"
-    },
-    {
-      "id": "trust-service",
-      "type": "security",
-      "label": "Trust Service",
-      "sublabel": "Python · IA",
-      "pos": [
-        570,
-        380
-      ],
-      "size": [
-        150,
-        56
-      ],
-      "tag": "Trust Score"
-    },
-    {
-      "id": "auction-engine",
-      "type": "backend",
-      "label": "Auction Engine",
-      "sublabel": "Go · Lógica de subasta",
-      "pos": [
-        250,
-        560
-      ],
-      "size": [
-        160,
-        56
-      ]
-    },
-    {
-      "id": "postgres",
-      "type": "database",
-      "label": "PostgreSQL",
-      "sublabel": "Datos transaccionales",
-      "pos": [
-        100,
-        730
-      ],
-      "size": [
-        160,
-        56
-      ]
-    },
-    {
-      "id": "redis",
-      "type": "database",
-      "label": "Redis",
-      "sublabel": "Precio en caliente",
-      "pos": [
-        400,
-        730
-      ],
-      "size": [
-        140,
-        56
-      ]
-    },
-    {
-      "id": "pasarela-pago",
-      "type": "external",
-      "label": "Pasarela de Pago",
-      "sublabel": "Stripe / PayPal",
-      "pos": [
-        40,
-        890
-      ],
-      "size": [
-        160,
-        50
-      ]
-    },
-    {
-      "id": "cdn-streaming",
-      "type": "external",
-      "label": "CDN Streaming",
-      "sublabel": "Video en vivo",
-      "pos": [
-        300,
-        890
-      ],
-      "size": [
-        150,
-        50
-      ]
-    },
-    {
-      "id": "notificaciones",
-      "type": "external",
-      "label": "Notificaciones",
-      "sublabel": "Email / Push",
-      "pos": [
-        560,
-        890
-      ],
-      "size": [
-        150,
-        50
-      ]
+      "id": "P3",
+      "title": "Pasarela Stripe y Servicios Externos Desacoplados",
+      "summary": "Stripe (retención de garantías y cobros), Cloud Storage S3/KYC, Gemini IA y Web3 se conectan mediante adaptadores independientes."
     }
   ],
-  "boundaries": [
+  "zones": [
     {
-      "kind": "region",
-      "label": "Presentación",
-      "wraps": [
-        "gateway"
-      ]
+      "id": "Z1_CLIENTES",
+      "label": "1. Clientes y Roles (Frontend SPA)",
+      "color": "#38bdf8",
+      "description": "Interfaz web única adaptada según el rol del usuario autenticado (Postor, Vendedor, Martillero o Admin)."
     },
     {
-      "kind": "region",
-      "label": "Negocio — Orientada a Eventos",
-      "wraps": [
-        "broker",
-        "auction-engine",
-        "trust-service"
-      ]
+      "id": "Z2_BACKEND",
+      "label": "2. Core Backend: Monolito Modular Go + Bus en Memoria",
+      "color": "#60a5fa",
+      "description": "Único servidor Go 1.23+ con los 6 módulos de negocio y el coordinador efímero en memoria (Redis/Go) para tiempo real."
     },
     {
-      "kind": "region",
-      "label": "Datos",
-      "wraps": [
-        "postgres",
-        "redis"
-      ]
+      "id": "Z3_DATABASE",
+      "label": "3. Única Base de Datos Principal (ACID)",
+      "color": "#22c55e",
+      "description": "PostgreSQL 16 como única fuente de verdad para usuarios, subastas, encargado, lote, garantías Stripe, pujas y auditoría."
     },
     {
-      "kind": "region",
-      "label": "Sistemas Externos",
-      "wraps": [
-        "pasarela-pago",
-        "cdn-streaming",
-        "notificaciones"
-      ]
+      "id": "Z4_EXTERNOS",
+      "label": "4. Pasarela Stripe y Servicios Externos",
+      "color": "#c084fc",
+      "description": "Integraciones externas enchufables: Stripe API (Pagos/Hold), Cloud Storage S3 & KYC, Google Gemini IA y Red Web3 opcional."
     }
   ],
-  "connections": [
+  "modules_roadmap": [
     {
-      "id": "pujador-gw",
-      "from": "pujador",
-      "to": "gateway",
-      "label": "HTTPS/WS",
-      "variant": "emphasis",
-      "fromSide": "bottom",
-      "toSide": "top"
+      "id": "MOD-1",
+      "number": "Módulo 1",
+      "name": "Usuarios, Roles (RBAC) y Panel Admin",
+      "status": "Backend Listo · UI en Integración",
+      "complexity": "Baja",
+      "db_tables": ["usuarios", "refresh_tokens"],
+      "external_service": "Servicio KYC / Verificación Documental",
+      "endpoints": ["POST /api/v1/auth/register", "POST /api/v1/auth/login", "GET /api/v1/admin/users", "PATCH /api/v1/admin/users/{id}/role", "PATCH /api/v1/admin/users/{id}/status"],
+      "description": "Registro con solicitud de rol (Postor, Vendedor, Martillero), aprobación KYC y panel del Administrador para activar cuentas y asignar permisos."
     },
     {
-      "id": "rematador-gw",
-      "from": "rematador",
-      "to": "gateway",
-      "label": "HTTPS",
-      "variant": "emphasis",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelDy": 44
+      "id": "MOD-2",
+      "number": "Módulo 2",
+      "name": "Catálogo, Encargado Oficial y Detalles del Lote",
+      "status": "Backend Listo · UI en Integración",
+      "complexity": "Baja",
+      "db_tables": ["subastas (encargado_json, detalles_lote_json)"],
+      "external_service": "Cloud Storage (S3 / Cloudinary) para fotos y PDF de peritaje",
+      "endpoints": ["POST /api/v1/subastas", "PUT /api/v1/subastas/{id}/encargado", "PUT /api/v1/subastas/{id}/detalles-lote"],
+      "description": "Publicación de subastas, asignación del Martillero/Encargado oficial (licencia, cargo, experiencia) y subida de la ficha técnica y pericial del lote."
     },
     {
-      "id": "vendedor-gw",
-      "from": "vendedor",
-      "to": "gateway",
-      "fromSide": "bottom",
-      "toSide": "top"
+      "id": "MOD-3",
+      "number": "Módulo 3",
+      "name": "Pasarela de Pagos Stripe y Custodia de Garantías",
+      "status": "En Desarrollo Continuo",
+      "complexity": "Media",
+      "db_tables": ["garantias"],
+      "external_service": "Stripe API (PaymentIntents Manual Capture + Webhooks)",
+      "endpoints": ["POST /api/v1/subastas/{id}/garantias", "GET /api/v1/subastas/{id}/garantias/me", "POST /api/v1/webhooks/stripe"],
+      "description": "Congelamiento preventivo de garantía en tarjeta con Stripe (Pre-Auth Hold), cobro automático al ganador al cerrar la subasta y liberación inmediata al resto."
     },
     {
-      "id": "admin-gw",
-      "from": "admin",
-      "to": "gateway",
-      "fromSide": "bottom",
-      "toSide": "right"
+      "id": "MOD-4",
+      "number": "Módulo 4",
+      "name": "Sala en Vivo, Pujas y Martillero (Tiempo Real)",
+      "status": "Implementado",
+      "complexity": "Media",
+      "db_tables": ["pujas", "subastas"],
+      "external_service": "Bus Efímero en Memoria (Redis Lock 1.5s + WebSocket Hub)",
+      "endpoints": ["POST /api/v1/subastas/{id}/pujas", "POST /api/v1/subastas/{id}/conteo", "POST /api/v1/subastas/{id}/cerrar", "WS /ws"],
+      "description": "Recepción de pujas sin colisiones, regla Anti-Sniping (+30s en los últimos 15s), conteo de martillo ('a la una, a las dos') y difusión WebSocket instantánea."
     },
     {
-      "id": "gw-broker",
-      "from": "gateway",
-      "to": "broker",
-      "label": "publica puja",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelDy": 60
+      "id": "MOD-5",
+      "number": "Módulo 5",
+      "name": "Copiloto IA (Gemini) y Auto-Puja Asistida",
+      "status": "Implementado con Fallback Local",
+      "complexity": "Baja (Desacoplado)",
+      "db_tables": ["garantias", "subastas"],
+      "external_service": "Google Gemini API (con Circuit Breaker de 150ms)",
+      "endpoints": ["POST /api/v1/agentes/delegar", "POST /api/v1/subastas/{id}/agentes/auto-puja", "GET /api/v1/admin/ia/telemetria"],
+      "description": "Evaluación de riesgo del postor y pujas automáticas hasta un tope máximo (max_cap). Si Gemini no está disponible, opera con regla local sin bloquear el sistema."
     },
     {
-      "id": "broker-engine",
-      "from": "broker",
-      "to": "auction-engine",
-      "label": "consume cola",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelDy": 60
-    },
-    {
-      "id": "broker-trust",
-      "from": "broker",
-      "to": "trust-service",
-      "label": "evalúa puja",
-      "variant": "security"
-    },
-    {
-      "id": "engine-pg",
-      "from": "auction-engine",
-      "to": "postgres",
-      "label": "SQL",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "id": "engine-redis",
-      "from": "auction-engine",
-      "to": "redis",
-      "label": "cache precio",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "id": "pg-pago",
-      "from": "postgres",
-      "to": "pasarela-pago",
-      "label": "cobro",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "id": "redis-notif",
-      "from": "redis",
-      "to": "notificaciones",
-      "label": "resultado",
-      "fromSide": "bottom",
-      "toSide": "top"
-    }
-  ],
-  "cards": [
-    {
-      "dot": "cyan",
-      "title": "Actores",
-      "items": [
-        "Pujador: explora, puja y paga",
-        "Rematador: organiza evento en vivo",
-        "Vendedor: registra ítems",
-        "Administrador: gestiona fraude"
-      ]
-    },
-    {
-      "dot": "emerald",
-      "title": "Negocio",
-      "items": [
-        "RabbitMQ: orden verificable (DA02)",
-        "Auction Engine: valida pujas (DA03)",
-        "Trust Service: filtro IA (DA06)"
-      ]
-    },
-    {
-      "dot": "violet",
-      "title": "Datos",
-      "items": [
-        "PostgreSQL: registro transaccional",
-        "Redis: precio actual en memoria"
-      ]
-    },
-    {
-      "dot": "rose",
-      "title": "Externos",
-      "items": [
-        "Pasarela de pago (Stripe/PayPal)",
-        "CDN de streaming (video)",
-        "Notificaciones (email/push)"
-      ]
+      "id": "MOD-6",
+      "number": "Módulo 6",
+      "name": "Auditoría Legal y Trazabilidad (SHA-256 / Web3)",
+      "status": "Implementado",
+      "complexity": "Baja",
+      "db_tables": ["logs_auditoria"],
+      "external_service": "Red Base L2 Opcional (Merkle Root & EIP-712)",
+      "endpoints": ["GET /api/v1/subastas/{id}/auditoria-web3"],
+      "description": "Cada puja queda sellada con un hash SHA-256 encadenado al anterior en PostgreSQL y genera un acta criptográfica (Merkle Proof) auditable al cierre."
     }
   ]
 }

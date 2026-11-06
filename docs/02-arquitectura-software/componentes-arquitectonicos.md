@@ -2,113 +2,108 @@
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
 > **Capa:** Arquitectura de Software · Componentes de Sistema  
-> **Enfoque:** Clean Architecture + Event-Driven Architecture  
-> **Versión:** 1.0
+> **Enfoque:** Monolito Modular Hexagonal (Clean Architecture) con **1 Sola Base de Datos (`PostgreSQL 16`)**, Coordinación en Memoria (`Redis`) y Adaptadores Externos (`Stripe`, `Cloud Storage/KYC`, `Gemini IA`, `Web3`)  
+> **Versión:** 3.1
 
 ---
 
-## 1. Visión General de Componentes
+## 1. Visión General de Componentes (Sin Sobre-Ingeniería)
 
-La arquitectura de **LiveBid** se compone de módulos desacoplados bajo el enfoque de **Clean Architecture**, asegurando que el motor de subasta y la lógica del martillazo no dependan de frameworks web, bases de datos específicas o servicios externos de pago.
+La arquitectura de **LiveBid** se organiza en un único backend en **Go 1.23+** siguiendo la **Arquitectura Hexagonal (Puertos y Adaptadores)**. El núcleo de negocio está completamente limpio y se conecta hacia afuera con:
+1. **PostgreSQL 16** como **Única Base de Datos del Sistema (Single Source of Truth)**.
+2. **Redis 7** únicamente como **Coordinador Efímero en Memoria** (semáforo `SETNX` de `1.5s` y difusión de eventos WebSocket, **no** como segunda base de datos).
+3. **Adaptadores de Servicios Externos:** **Pasarela de Pagos Stripe**, **Almacenamiento Cloud / Validación KYC**, **Google Gemini IA** y **Pasarela Web3 Opcional**.
 
 ```mermaid
 graph TD
-    subgraph Presentacion["1. Capa de Presentación (Interface Adapters)"]
-        WSHandler["WebSocket Room Handler<br><i>(Socket.io / WS Server)</i>"]
-        RESTCtrl["REST Controllers<br><i>(Subastas, Usuarios, Pagos)</i>"]
-        EventSub["Event Consumers / Listeners<br><i>(RabbitMQ Subscribers)</i>"]
+    subgraph Presentacion["1. Adaptadores Primarios (Entrada HTTP / WebSocket / Webhooks)"]
+        AuthHandler["Auth & Admin RBAC Handler<br><i>(Registro, Login, Roles, Aprobación KYC)</i>"]
+        AuctionHandler["Auction & Catalog Handler<br><i>(Subastas, Ficha Encargado, Detalles Lote)</i>"]
+        BidHandler["Bid & Stripe Escrow Handler<br><i>(Pujas, Retención Stripe Hold, Webhooks)</i>"]
+        AIHandler["Agent & AI Handler<br><i>(Auto-Puja y Copiloto IA)</i>"]
+        WSHandler["WebSocket Handler + AuctionRoomHub<br><i>(Salas en Vivo en Tiempo Real)</i>"]
     end
 
-    subgraph Aplicacion["2. Capa de Aplicación (Use Cases)"]
-        UCPuja["ProcesarPujaEnTiempoReal<br><i>(Caso de uso crítico)</i>"]
-        UCSubasta["GestionarCicloSubasta<br><i>(Iniciar, Martillazo, Adjudicar)</i>"]
-        UCEscrow["RetenerGarantiaEscrow<br><i>(Bloqueo de fondos)</i>"]
-        UCAudit["RegistrarTrazabilidadAuditoria<br><i>(Log inmutable)</i>"]
+    subgraph Aplicacion["2. Capa de Aplicación — Los 6 Módulos de Negocio (internal/core/services)"]
+        AuthSvc["M1. AuthService<br><i>(Identidad, JWT, Roles y Estado KYC)</i>"]
+        CatalogSvc["M2. AuctionCatalogService<br><i>(Crear, EncargadoSubasta, DetallesLote, Conteo)</i>"]
+        EscrowSvc["M3. GuaranteeService (Stripe & Escrow)<br><i>(Retener Garantía, Capturar Ganador, Liberar Resto)</i>"]
+        AuctionSvc["M4. AuctionService & BidService<br><i>(ProcesarPuja Atómica, Anti-Sniping y CerrarVencidas)</i>"]
+        AgentSvc["M5. AgentDelegationService & Risk<br><i>(Scoring IA con Fallback y Auto-Puja)</i>"]
+        Web3Svc["M6. Web3AuditService<br><i>(Cadena SHA-256 y Acta Merkle)</i>"]
     end
 
-    subgraph Dominio["3. Capa de Dominio (Core Enterprise Rules)"]
-        EntSubasta["Entidad Subasta<br><i>(State Machine del lote)</i>"]
-        EntPuja["Entidad / Value Object Puja<br><i>(Monto, Timestamp, Secuencia)</i>"]
-        PortRepo["Puerto Repositorio Subastas<br><i>(ISubastaRepository)</i>"]
-        PortEngine["Puerto Motor Concurrencia<br><i>(IBidEngineLock)</i>"]
-        PortPayment["Puerto Pasarela Escrow<br><i>(IPaymentEscrowPort)</i>"]
-        PortNotifier["Puerto Difusión Eventos<br><i>(IRoomNotifierPort)</i>"]
+    subgraph Dominio["3. Capa de Dominio Puro (internal/core/domain)"]
+        EntSubasta["Aggregate Root: Subasta<br><i>(EncargadoSubasta, DetallesLote, Anti-Sniping, Tramos)</i>"]
+        EntUser["Entidad: User & RBAC<br><i>(POSTOR, VENDEDOR, MARTILLERO, ADMIN)</i>"]
+        EntGuarantee["Entidad: Guarantee (Escrow)<br><i>(RETENIDA, CAPTURADA_COBRO, LIBERADA)</i>"]
+        Ports["Puertos de Salida (Interfaces Go)<br><i>(Repositories, PaymentEscrowPort, AIRiskPort, BidLockPort)</i>"]
     end
 
-    subgraph Infraestructura["4. Capa de Infraestructura (Frameworks & Drivers)"]
-        AdapRedis["Adaptador Redis<br><i>(Atomic Locks & PubSub)</i>"]
-        AdapPostgres["Adaptador PostgreSQL<br><i>(Persistencia transaccional)</i>"]
-        AdapRabbit["Adaptador RabbitMQ<br><i>(Cola de eventos de subasta)</i>"]
-        AdapNiubiz["Adaptador Pasarela Pagos<br><i>(Niubiz / Stripe API)</i>"]
+    subgraph BaseDeDatos["4A. Única Base de Datos Principal (Persistencia ACID)"]
+        AdapPostgres[("🗄️ PostgreSQL 16 (Única BD)<br><i>usuarios · subastas (JSONB) · garantias · pujas · logs_auditoria</i>")]
     end
 
-    WSHandler --> UCPuja
-    RESTCtrl --> UCSubasta
-    RESTCtrl --> UCEscrow
-    EventSub --> UCAudit
+    subgraph CoordinacionMemoria["4B. Coordinación Efímera en Memoria (NO es Base de Datos)"]
+        AdapRedis(("⚡ Bus en Memoria (Redis / Go)<br><i>Semáforo 1.5s (SETNX) + Pub/Sub Salas WS + Caché Volátil</i>"))
+    end
 
-    UCPuja --> EntSubasta
-    UCPuja --> EntPuja
-    UCPuja --> PortRepo
-    UCPuja --> PortEngine
-    UCPuja --> PortNotifier
+    subgraph ServiciosExternos["4C. Pasarela Stripe y Servicios Externos (Adaptadores Plug & Play)"]
+        AdapStripe["💳 Stripe Payment Adapter<br><i>(PaymentIntents Hold, Capture, Cancel & Webhooks)</i>"]
+        AdapDocs["☁️ Cloud Storage & KYC Adapter<br><i>(Fotos del Lote, PDF Peritaje S3/CDN, Validación DNI/SUNARP)</i>"]
+        AdapAI["🤖 Gemini AI Adapter + CircuitBreaker<br><i>(Evaluación de Riesgo <150ms con Fallback Local)</i>"]
+        AdapWeb3["⛓️ Web3 Adapter (Opcional)<br><i>(Firma EIP-712 y Sello Merkle en Base L2)</i>"]
+    end
 
-    UCSubasta --> EntSubasta
-    UCSubasta --> PortRepo
+    AuthHandler --> AuthSvc
+    AuctionHandler --> CatalogSvc & Web3Svc
+    BidHandler --> AuctionSvc & EscrowSvc
+    AIHandler --> AgentSvc
+    WSHandler --> AuctionSvc
 
-    UCEscrow --> PortPayment
+    AuthSvc & CatalogSvc & EscrowSvc & AuctionSvc & AgentSvc & Web3Svc --> EntSubasta & EntUser & EntGuarantee
+    AuthSvc & CatalogSvc & EscrowSvc & AuctionSvc & AgentSvc & Web3Svc --> Ports
 
-    AdapRedis -.->|Implementa| PortEngine
-    AdapRedis -.->|Implementa| PortNotifier
-    AdapPostgres -.->|Implementa| PortRepo
-    AdapRabbit -.->|Implementa| PortNotifier
-    AdapNiubiz -.->|Implementa| PortPayment
+    AdapPostgres -.->|Persistencia Única| Ports
+    AdapRedis -.->|Lock y Broadcast| Ports
+    AdapStripe -.->|Pagos Fiat| Ports
+    AdapDocs -.->|Archivos y KYC| Ports
+    AdapAI -.->|IA Resiliente| Ports
+    AdapWeb3 -.->|Auditoría Cripto| Ports
 ```
 
 ---
 
-## 2. Detalle de Capas y Componentes
+## 2. Claridad Arquitectónica: ¿Qué hace cada pieza de infraestructura?
 
-### 2.1 Capa de Presentación
-- **WebSocket Room Handler:** Gestiona el ciclo de vida de los sockets de clientes conectados a la sala de remate, valida sesiones JWT de conexión y encamina eventos entrantes (`puja:emitir`, `sala:unirse`).
-- **Controladores REST:** Endpoints HTTP `/api/v1` para la autenticación de usuarios, registro de catálogo de bienes, consulta histórica y depósito de garantías.
-- **Event Consumers:** Receptores de mensajes asíncronos desacoplados provenientes de colas de RabbitMQ para procesamiento en segundo plano (facturación, notificaciones por email/SMS).
+### 2.1 PostgreSQL 16 (La Única Base de Datos del Proyecto)
+- Es la **única fuente de verdad** donde se guardan datos permanentes.
+- Combina tablas relacionales clásicas (`usuarios`, `garantias`, `pujas`, `logs_auditoria`) con columnas flexibles `JSONB` en `subastas` (`encargado_json` y `detalles_lote_json`) para almacenar certificados periciales, galería de fotos y especificaciones sin necesidad de crear decenas de tablas secundarias ni agregar una base de datos NoSQL adicional.
 
-### 2.2 Capa de Aplicación
-- **ProcesarPujaEnTiempoReal (Caso de uso crítico):** 
-  1. Verifica que la subasta esté en estado `ACTIVA` o `EN_CONTEO`.
-  2. Valida mediante `IPaymentEscrowPort` que el postor tenga garantía suficiente.
-  3. Adquiere lock distribuido en Redis (`IBidEngineLock`) para asegurar atomicidad.
-  4. Incrementa el precio y registra la nueva puja líder con timestamp oficial del servidor.
-  5. Difunde el nuevo estado a la sala mediante `IRoomNotifierPort`.
-- **GestionarCicloSubasta:** Orquesta las transiciones de estado del lote (Programada $\rightarrow$ En Vivo $\rightarrow$ Cuenta Regresiva $\rightarrow$ Martillo 1 $\rightarrow$ Martillo 2 $\rightarrow$ Martillazo Final $\rightarrow$ Adjudicada).
-- **RetenerGarantiaEscrow:** Congela el porcentaje de garantía del postor antes de permitirle ingresar a la sala de pujas activas.
+### 2.2 Redis 7 (Coordinador Efímero en Memoria — No Base de Datos)
+- **No almacena ninguna tabla ni registro de negocio.**
+- Cumple exclusivamente dos funciones en tiempo real:
+  1. **Semáforo Atómico (`SETNX` con expiración de 1.5 segundos):** Evita que dos postores ganen con el mismo monto en el mismo milisegundo.
+  2. **Megáfono de Salas (`Pub/Sub`):** Difunde instantáneamente la nueva oferta a los clientes WebSocket conectados.
+- **Ventaja para el desarrollo continuo:** Si un desarrollador levanta el backend en su máquina sin Redis, el servidor Go usa automáticamente su implementación en memoria nativa (`InMemoryLock` + `AuctionRoomHub`).
 
-### 2.3 Capa de Dominio
-- **Entidad Subasta:** Raíz de agregado (Aggregate Root) que contiene las reglas invariantes de negocio: incremento mínimo por tramo de precio, extensión automática de tiempo si hay puja en los últimos 15 segundos ("Anti-Sniping"), y validación de postor líder.
-- **Entidad Puja:** Representa la oferta realizada con su valor numérico, identificador del postor, marca temporal inmutable y correlativo de sala.
-- **Puertos de Salida (Interfaces):**
-  - `ISubastaRepository`: Abstracción para persistir y consultar subastas.
-  - `IBidEngineLock`: Abstracción para control de concurrencia y mutéx atómico.
-  - `IPaymentEscrowPort`: Abstracción para retención y liberación de garantías financieras.
-  - `IRoomNotifierPort`: Abstracción para publicación en tiempo real a clientes.
+### 2.3 Pasarela de Pagos Stripe (`Stripe Escrow Adapter`)
+- Conecta el módulo de garantías (`GuaranteeService`) con **Stripe API**:
+  - **Pre-autorización (`Hold`):** Retiene el depósito de garantía en la tarjeta del postor (`capture_method: manual`) y guarda el `payment_intent_id` en `garantias.autorizacion_bancaria_id`.
+  - **Liquidación Automática:** Al cerrarse la subasta, captura el depósito del postor ganador y libera sin costo las retenciones de los demás postores.
 
-### 2.4 Capa de Infraestructura
-- **Redis Adapter:** Utiliza comandos atómicos (`SETNX`, scripts Lua) para control de concurrencia en $< 2$ ms y Redis Pub/Sub para propagar eventos a todas las instancias del Gateway.
-- **PostgreSQL Adapter:** Persiste datos con integridad referencial ACID (usuarios, bienes subastados, transacciones financieras consolidadas y log de auditoría).
-- **RabbitMQ Adapter:** Cola de mensajería duradera que garantiza la entrega de eventos de negocio a los sistemas de facturación y notificaciones externas.
-- **Payment Adapter:** Cliente HTTP hacia pasarelas autorizadas (ej. Niubiz / Stripe) para autorización y captura de fondos.
+### 2.4 Servicios Externos de Almacenamiento y Verificación (`Cloud Storage & KYC`)
+- Permite adjuntar en `DetallesLote` las URLs de fotografías de alta resolución y el **Certificado de Peritaje en PDF** alojados en S3/Cloudinary, así como verificar la identidad (`documento_identidad`) del postor y la licencia oficial del `Martillero`.
 
 ---
 
-## 3. Matriz de Trazabilidad: Requisitos $\rightarrow$ Componentes
+## 3. Matriz de Trazabilidad: Módulos $\rightarrow$ Componentes
 
-| Requisito Funcional | Atributo de Calidad / Escenario | Componente Responsable | Patrón Aplicado |
-|---|---|---|---|
-| **RF-01: Autenticación y Verificación** | EQ-04 (Seguridad Zero Trust) | `RESTCtrl Usuarios`, Middleware JWT | Chain of Responsibility |
-| **RF-02: Depósito de Garantía (Escrow)** | EQ-04 (Fondos en Custodia) | `UCEscrow`, `IPaymentEscrowPort`, `AdapNiubiz` | Adapter, Facade |
-| **RF-03: Sala de Subasta en Vivo** | EQ-03 (Disponibilidad y Resiliencia) | `WSHandler`, `IRoomNotifierPort`, `AdapRedis` | Observer, Pub-Sub |
-| **RF-04: Procesamiento de Puja** | EQ-01 (Rendimiento <200ms) | `UCPuja`, `IBidEngineLock`, `AdapRedis` | Mutex Atómico, Command |
-| **RF-05: Prevención de Colisiones** | EQ-02 (Anti-Race Condition) | `EntSubasta`, Secuenciador Redis + RabbitMQ | State Machine, FIFO Queue |
-| **RF-06: Adjudicación y Liquidación** | EQ-05 (Mantenibilidad) | `UCSubasta`, `ISubastaRepository`, `AdapPostgres` | Repository, Unit of Work |
-
+| Módulo de Desarrollo Continuo | Servicios y Handlers en Go | Tabla en PostgreSQL 16 | Servicio Externo Asociado |
+| :--- | :--- | :--- | :--- |
+| **M1. Usuarios, Roles y Admin** | `AuthHandler`, `AuthService`, `CachedUserRepository` | `usuarios`, `refresh_tokens` | Verificación KYC / Correo |
+| **M2. Catálogo, Encargado y Lote** | `AuctionHandler`, `AuctionCatalogService` | `subastas` (`encargado_json`, `detalles_lote_json`) | Cloud Storage (S3 / CDN Fotos y PDF) |
+| **M3. Pagos Stripe y Garantías** | `EscrowHandler`, `GuaranteeService` | `garantias` | **Stripe API (PaymentIntents + Webhooks)** |
+| **M4. Pujas en Vivo y Martillero** | `BidHandler`, `BidService`, `AuctionRoomHub` | `pujas`, `subastas` | Bus en Memoria (Redis Lock + Pub/Sub) |
+| **M5. Copiloto IA y Auto-Puja** | `AgentAIHandler`, `AgentDelegationService`, `CircuitBreaker` | `subastas`, `garantias` | **Google Gemini API** (con Fallback Local) |
+| **M6. Auditoría y Trazabilidad** | `Web3AuditService`, `PostgresBidRepository` | `logs_auditoria` | Red Base L2 (Opcional / Merkle Proof) |

@@ -2,88 +2,84 @@
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
 > **Capa:** Diseño Interno de Software · **Nivel C4:** 4 – Código  
-> **Estándar:** Software Design Description (SDD) · **Versión:** 1.0
+> **Lenguaje Oficial:** Go 1.23+ · **Versión:** 3.0
 
 ---
 
 ## 1. Objetivo
 
-Documentar cómo se aplican los **cinco principios de diseño SOLID** en el backend de **LiveBid**, asegurando que el código sea modular, testeable, desacoplado y resistente al cambio ante altas demandas de concurrencia y transaccionalidad.
+Documentar cómo se aplican los **cinco principios SOLID** de forma idiomática en el backend en **Go 1.23+** de **LiveBid** ([`tecnologia/livebid-backend`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend)).
 
 ---
 
-## 2. Aplicación de SOLID en el Módulo de Subastas y Pujas
+## 2. Aplicación de SOLID en el Backend Go de LiveBid
 
-| Principio | Capa donde se aplica | Cómo se cumple en LiveBid | Archivos de Referencia |
+| Principio | Capa donde se aplica | Cómo se cumple en LiveBid (Go 1.23+) | Archivos Reales de Referencia |
 |---|---|---|---|
-| **S** · Responsabilidad Única (*Single Responsibility*) | Todas las capas | Cada clase tiene una única razón de cambio: el controlador de sockets gestiona la conexión de red, el caso de uso orquesta la validación de la puja, la entidad `Subasta` aplica las reglas de negocio e incrementos, y el repositorio maneja la persistencia SQL. | `websocket-bid.handler.ts`, `procesar-puja.use-case.ts`, `subasta.ts`, `postgres-subasta.repo.ts` |
-| **O** · Abierto/Cerrado (*Open/Closed*) | Dominio e Infraestructura | El sistema está abierto a la extensión pero cerrado a la modificación. Para admitir un nuevo formato de subasta (ej. Subasta Holandesa descendente), se implementa una nueva estrategia de incremento y estado sin modificar `ProcesarPujaUseCase`. Para agregar PayPal, se añade un adaptador nuevo. | `regla-incremento.ts`, `niubiz-escrow.adapter.ts`, `stripe-escrow.adapter.ts` |
-| **L** · Sustitución de Liskov (*Liskov Substitution*) | Infraestructura y Puertos | Cualquier implementación de `IPaymentEscrowPort` (Niubiz, Stripe o Mock en memoria) puede sustituir a otra sin que el caso de uso `ProcesarPujaUseCase` falle ni perciba la diferencia en los contratos de retención y cobro. | `escrow-port.ts`, `niubiz-escrow.adapter.ts`, `memoria-escrow.adapter.ts` |
-| **I** · Segregación de Interfaces (*Interface Segregation*) | Dominio | Las interfaces son específicas y granulares. El caso de uso de pujas no depende de una mega-interfaz `ISistemaTotal`, sino de interfaces pequeñas y focalizadas: `IBidLockPort` solo adquiere locks, `IPaymentEscrowPort` solo gestiona garantías, e `IRoomNotifierPort` solo emite eventos. | `bid-lock-port.ts`, `escrow-port.ts`, `room-notifier-port.ts` |
-| **D** · Inversión de Dependencias (*Dependency Inversion*) | Aplicación e Infraestructura | Los módulos de alto nivel (casos de uso) no dependen de módulos de bajo nivel (PostgreSQL, Redis, Socket.io). Ambos dependen de abstracciones (interfaces del dominio). Las dependencias concretas se inyectan en el módulo de inicialización (`subastas.module.ts`). | `procesar-puja.use-case.ts`, `subasta-repository.ts`, `subastas.module.ts` |
+| **S** · Responsabilidad Única (*Single Responsibility*) | Todas las capas | Cada struct y paquete tiene una única razón de cambio: `AuctionRoomHub` solo multiplexa salas WebSocket; `AuctionService` orquesta pujas; `Subasta` valida invariantes de dominio; `Web3AuditService` genera pruebas Merkle; `PostgresBidRepository` ejecuta transacciones SQL. | [`room_hub.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/realtime/room_hub.go), [`auction_service.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/services/auction_service.go), [`auction.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/auction.go), [`web3_audit_service.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/services/web3_audit_service.go) |
+| **O** · Abierto/Cerrado (*Open/Closed*) | Dominio e Infraestructura | El motor de subastas está abierto a nuevos modelos de IA, nuevos verificadores Web3 o nuevos almacenes sin modificar `AuctionService`. Por ejemplo, `MultiModelRouter` permite registrar y activar nuevos proveedores LLM en caliente sin alterar el flujo de puja. | [`multi_model_router.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/ai/multi_model_router.go), [`ports.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/ports.go) |
+| **L** · Sustitución de Liskov (*Liskov Substitution*) | Puertos y Adaptadores | Cualquier implementación de `UserRepository` (`PostgresUserRepository` o su decorador `CachedUserRepository`) o de `AIRiskPort` (`GeminiRiskAdapter`, `CircuitBreaker`, `MultiModelRouter`) es 100% intercambiable sin alterar la semántica esperada por los servicios. | [`cached_user_repository.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/persistence/cached_user_repository.go), [`circuit_breaker.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/ai/circuit_breaker.go) |
+| **I** · Segregación de Interfaces (*Interface Segregation*) | Dominio (`ports.go`) | En lugar de una interfaz monolítica, [`domain/ports.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/ports.go) define interfaces pequeñas y focalizadas al estilo idiomático de Go: `BidLockPort`, `EscrowPort`, `BidNotifierPort`, `AIRiskPort`, `FraudTelemetryPort`, `BidSignatureVerifierPort` y `SmartContractEscrowPort`. | [`internal/core/domain/ports.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/ports.go) |
+| **D** · Inversión de Dependencias (*Dependency Inversion*) | Aplicación e Infraestructura | Los casos de uso en `internal/core/services` dependen exclusivamente de las interfaces definidas en `internal/core/domain`. El ensamblaje concreto (*wiring*) ocurre únicamente en `cmd/server/main.go`. | [`cmd/server/main.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/cmd/server/main.go), [`auction_service.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/services/auction_service.go) |
 
 ---
 
-## 3. Comparativa: Con SOLID vs. Sin SOLID en LiveBid
-
-| Escenario Real en LiveBid | Sin SOLID | Con SOLID (Diseño LiveBid) |
-|---|---|---|
-| **La pasarela Niubiz experimenta latencia o cambia su API** | El programador debe modificar el código de la sala de pujas, arriesgando caídas en vivo. | Solo se ajusta la clase `NiubizEscrowAdapter`. El motor de subastas ni se entera del cambio. |
-| **Se ejecutan pruebas unitarias de concurrencia** | Se necesita tener levantado un cluster real de Redis y PostgreSQL con red activa. | Se inyectan `MemoriaBidLockAdapter` y `MemoriaSubastaRepository` ejecutando 1,000 tests en milisegundos. |
-| **Se crea una subasta con incremento dinámico porcentual** | Se llena el caso de uso de bloques `switch/case` e `if` anidados propensos a bugs. | Se crea una clase `IncrementoPorcentualStrategy` que implementa `IReglaIncremento`. |
-| **Se cae el broker de RabbitMQ** | El backend colapsa porque las llamadas al broker están acopladas directamente al controlador. | El adaptador maneja la contingencia o conmuta a almacenamiento local temporal sin tumbar la puja. |
-
----
-
-## 4. Trazabilidad con Clean Architecture
+## 3. Diagrama UML de Inversión y Segregación de Interfaces en Go
 
 ```mermaid
 classDiagram
     direction TB
-    class ISubastaRepository {
+
+    class SubastaRepository {
         <<interface>>
-        +obtenerPorId(id: string) Promise~Subasta~
-        +guardar(subasta: Subasta) Promise~void~
+        +ObtenerPorID(ctx, id) (*Subasta, error)
+        +Listar(ctx) ([]*Subasta, error)
+        +ListarVencidas(ctx, now) ([]*Subasta, error)
+        +Guardar(ctx, subasta) error
     }
-    class IBidLockPort {
+    class BidLockPort {
         <<interface>>
-        +adquirirLock(subastaId: string) Promise~boolean~
-        +liberarLock(subastaId: string) Promise~void~
+        +AdquirirLock(ctx, subastaID, ttl) (UnlockFunc, error)
     }
-    class IPaymentEscrowPort {
+    class AIRiskPort {
         <<interface>>
-        +validarGarantia(postorId: string, monto: number) Promise~boolean~
+        +EvaluarRiesgo(ctx, postorID, subastaID, monto) (RiskScore, error)
     }
-    class IRoomNotifierPort {
+    class BidSignatureVerifierPort {
         <<interface>>
-        +difundirNuevaPuja(puja: Puja) Promise~void~
+        +VerifyBidSignature(ctx, envelope, subastaID, postorID, monto) error
+    }
+    class SmartContractEscrowPort {
+        <<interface>>
+        +VerifyLockedCollateral(ctx, subastaID, postorID, monto) (bool, error)
+        +SettleWinnerOnChain(ctx, subastaID, winnerID, monto, merkleRoot) (*OnChainSettlementReceipt, error)
     }
 
-    class ProcesarPujaUseCase {
-        -subastaRepo: ISubastaRepository
-        -lockPort: IBidLockPort
-        -escrowPort: IPaymentEscrowPort
-        -notifierPort: IRoomNotifierPort
-        +ejecutar(cmd: ProcesarPujaCommand) Promise~PujaResponse~
+    class AuctionService {
+        -repo SubastaRepository
+        -lockPort BidLockPort
+        -riskPort AIRiskPort
+        -sigVerifier BidSignatureVerifierPort
+        -web3Escrow SmartContractEscrowPort
+        +ProcesarPuja(ctx, cmd) (*ProcesarPujaResult, error)
+        +CerrarVencidas(ctx, now) (int, error)
     }
 
-    class PostgresSubastaRepository {
-        -pool: PgPool
-        +obtenerPorId(id: string) Promise~Subasta~
-        +guardar(subasta: Subasta) Promise~void~
-    }
-    class RedisBidLockAdapter {
-        -redisClient: Redis
-        +adquirirLock(subastaId: string) Promise~boolean~
-        +liberarLock(subastaId: string) Promise~void~
-    }
+    class PostgresAuctionRepository
+    class RedisLockAdapter
+    class MultiModelRouter
+    class EIP712Verifier
+    class EVMEscrowAdapter
 
-    ProcesarPujaUseCase --> ISubastaRepository: Depende de interfaz (DIP)
-    ProcesarPujaUseCase --> IBidLockPort: Depende de interfaz (DIP)
-    ProcesarPujaUseCase --> IPaymentEscrowPort: Depende de interfaz (DIP)
-    ProcesarPujaUseCase --> IRoomNotifierPort: Depende de interfaz (DIP)
+    AuctionService --> SubastaRepository : Depende de abstracción (DIP)
+    AuctionService --> BidLockPort : Depende de abstracción (DIP)
+    AuctionService --> AIRiskPort : Depende de abstracción (DIP)
+    AuctionService --> BidSignatureVerifierPort : Depende de abstracción (DIP)
+    AuctionService --> SmartContractEscrowPort : Depende de abstracción (DIP)
 
-    PostgresSubastaRepository ..|> ISubastaRepository: Implementa (LSP/OCP)
-    RedisBidLockAdapter ..|> IBidLockPort: Implementa (LSP/OCP)
+    PostgresAuctionRepository ..|> SubastaRepository : Satisface implícitamente
+    RedisLockAdapter ..|> BidLockPort : Satisface implícitamente
+    MultiModelRouter ..|> AIRiskPort : Satisface implícitamente
+    EIP712Verifier ..|> BidSignatureVerifierPort : Satisface implícitamente
+    EVMEscrowAdapter ..|> SmartContractEscrowPort : Satisface implícitamente
 ```
-

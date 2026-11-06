@@ -21,9 +21,13 @@ type AuthService struct {
 }
 
 type RegisterUserCmd struct {
-	Name     string
-	Email    string
-	Password string
+	Name          string
+	Email         string
+	Password      string
+	RequestedRole domain.UserRole
+	DocumentID    string
+	Phone         string
+	WalletAddress string
 }
 
 type LoginCmd struct {
@@ -39,11 +43,17 @@ type AuthResponse struct {
 }
 
 type UserView struct {
-	ID     string            `json:"id"`
-	Name   string            `json:"name"`
-	Email  string            `json:"email"`
-	Role   domain.UserRole   `json:"role"`
-	Status domain.UserStatus `json:"status"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Email         string            `json:"email"`
+	Role          domain.UserRole   `json:"role"`
+	RequestedRole domain.UserRole   `json:"requested_role,omitempty"`
+	Status        domain.UserStatus `json:"status"`
+	KYCApproved   bool              `json:"kyc_aprobado"`
+	DocumentID    string            `json:"documento_identidad,omitempty"`
+	Phone         string            `json:"telefono,omitempty"`
+	WalletAddress string            `json:"wallet_address,omitempty"`
+	CreatedAt     time.Time         `json:"created_at,omitempty"`
 }
 
 func NewAuthService(users domain.UserRepository, hasher domain.PasswordHasher, tokens domain.TokenIssuer, refreshTokens ...domain.RefreshTokenStore) *AuthService {
@@ -58,6 +68,9 @@ func (s *AuthService) Register(ctx context.Context, cmd RegisterUserCmd) (UserVi
 	email := strings.ToLower(strings.TrimSpace(cmd.Email))
 	if len(cmd.Password) < 8 {
 		return UserView{}, domain.ErrInvalidPassword
+	}
+	if cmd.RequestedRole != "" && !domain.IsValidRole(cmd.RequestedRole) {
+		return UserView{}, domain.ErrInvalidRole
 	}
 	if _, err := s.users.FindByEmail(ctx, email); err == nil {
 		return UserView{}, domain.ErrUserAlreadyExists
@@ -77,10 +90,68 @@ func (s *AuthService) Register(ctx context.Context, cmd RegisterUserCmd) (UserVi
 	if err != nil {
 		return UserView{}, err
 	}
+	if cmd.RequestedRole != "" && cmd.RequestedRole != domain.RoleAdmin {
+		user.RequestedRole = cmd.RequestedRole
+	}
+	user.DocumentID = strings.TrimSpace(cmd.DocumentID)
+	user.Phone = strings.TrimSpace(cmd.Phone)
+	user.WalletAddress = strings.TrimSpace(cmd.WalletAddress)
+
 	if err := s.users.Save(ctx, user); err != nil {
 		return UserView{}, err
 	}
 	return toUserView(user), nil
+}
+
+// BootstrapAdmin garantiza que exista una cuenta ADMIN activa en el arranque del sistema.
+func (s *AuthService) BootstrapAdmin(ctx context.Context, name, email, password string) (UserView, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || len(password) < 8 {
+		return UserView{}, domain.ErrInvalidUser
+	}
+	existing, err := s.users.FindByEmail(ctx, email)
+	if err == nil && existing != nil {
+		if adminRepo, ok := s.users.(domain.AdminUserRepository); ok {
+			if existing.Role != domain.RoleAdmin {
+				_ = adminRepo.UpdateRole(ctx, existing.ID, domain.RoleAdmin)
+				existing.Role = domain.RoleAdmin
+			}
+			if existing.Status != domain.UserActive || !existing.KYCApproved {
+				_ = adminRepo.UpdateKYCAndStatus(ctx, existing.ID, domain.UserActive, true)
+				existing.Status = domain.UserActive
+				existing.KYCApproved = true
+			}
+		} else if existing.Status != domain.UserActive {
+			_ = s.users.UpdateStatus(ctx, existing.ID, domain.UserActive)
+			existing.Status = domain.UserActive
+		}
+		return toUserView(existing), nil
+	}
+	if !errors.Is(err, domain.ErrUserNotFound) && err != nil {
+		return UserView{}, err
+	}
+
+	hash, err := s.hasher.Hash(password)
+	if err != nil {
+		return UserView{}, err
+	}
+	now := s.now()
+	if strings.TrimSpace(name) == "" {
+		name = "Administrador del Sistema"
+	}
+	adminUser, err := domain.NewUser("usr_admin_root", name, email, hash, now)
+	if err != nil {
+		return UserView{}, err
+	}
+	adminUser.Role = domain.RoleAdmin
+	adminUser.RequestedRole = domain.RoleAdmin
+	adminUser.Status = domain.UserActive
+	adminUser.KYCApproved = true
+
+	if err := s.users.Save(ctx, adminUser); err != nil {
+		return UserView{}, err
+	}
+	return toUserView(adminUser), nil
 }
 
 func (s *AuthService) Login(ctx context.Context, cmd LoginCmd) (AuthResponse, error) {
@@ -111,10 +182,104 @@ func (s *AuthService) Login(ctx context.Context, cmd LoginCmd) (AuthResponse, er
 }
 
 func (s *AuthService) ActivateUser(ctx context.Context, id string) error {
-	if _, err := s.users.FindByID(ctx, id); err != nil {
+	user, err := s.users.FindByID(ctx, id)
+	if err != nil {
 		return err
 	}
+	if adminRepo, ok := s.users.(domain.AdminUserRepository); ok {
+		if user.RequestedRole != "" && user.RequestedRole != user.Role && user.RequestedRole != domain.RoleAdmin {
+			_ = adminRepo.UpdateRole(ctx, id, user.RequestedRole)
+		}
+		return adminRepo.UpdateKYCAndStatus(ctx, id, domain.UserActive, true)
+	}
 	return s.users.UpdateStatus(ctx, id, domain.UserActive)
+}
+
+func (s *AuthService) ListUsers(ctx context.Context, status domain.UserStatus, role domain.UserRole) ([]UserView, error) {
+	if status != "" && !domain.IsValidUserStatus(status) {
+		return nil, domain.ErrInvalidUserStatus
+	}
+	if role != "" && !domain.IsValidRole(role) {
+		return nil, domain.ErrInvalidRole
+	}
+	adminRepo, ok := s.users.(domain.AdminUserRepository)
+	if !ok {
+		return []UserView{}, nil
+	}
+	users, err := adminRepo.ListUsers(ctx, status, role)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]UserView, 0, len(users))
+	for _, u := range users {
+		views = append(views, toUserView(u))
+	}
+	return views, nil
+}
+
+func (s *AuthService) UpdateUserRole(ctx context.Context, id string, role domain.UserRole) (UserView, error) {
+	if !domain.IsValidRole(role) {
+		return UserView{}, domain.ErrInvalidRole
+	}
+	user, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	adminRepo, ok := s.users.(domain.AdminUserRepository)
+	if !ok {
+		user.Role = role
+		return toUserView(user), nil
+	}
+	if err := adminRepo.UpdateRole(ctx, id, role); err != nil {
+		return UserView{}, err
+	}
+	updated, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		user.Role = role
+		return toUserView(user), nil
+	}
+	return toUserView(updated), nil
+}
+
+func (s *AuthService) UpdateUserStatus(ctx context.Context, id string, status domain.UserStatus, kycApproved *bool) (UserView, error) {
+	if !domain.IsValidUserStatus(status) {
+		return UserView{}, domain.ErrInvalidUserStatus
+	}
+	user, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	approved := user.KYCApproved
+	if kycApproved != nil {
+		approved = *kycApproved
+	} else if status == domain.UserActive {
+		approved = true
+	}
+
+	if adminRepo, ok := s.users.(domain.AdminUserRepository); ok {
+		if err := adminRepo.UpdateKYCAndStatus(ctx, id, status, approved); err != nil {
+			return UserView{}, err
+		}
+	} else {
+		if err := s.users.UpdateStatus(ctx, id, status); err != nil {
+			return UserView{}, err
+		}
+	}
+	updated, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		user.Status = status
+		user.KYCApproved = approved
+		return toUserView(user), nil
+	}
+	return toUserView(updated), nil
+}
+
+func (s *AuthService) GetProfile(ctx context.Context, id string) (UserView, error) {
+	user, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	return toUserView(user), nil
 }
 
 func (s *AuthService) Refresh(ctx context.Context, rawToken string) (AuthResponse, error) {
@@ -157,5 +322,17 @@ func (s *AuthService) createRefreshToken(ctx context.Context, userID string) (st
 }
 
 func toUserView(user *domain.User) UserView {
-	return UserView{ID: user.ID, Name: user.Name, Email: user.Email, Role: user.Role, Status: user.Status}
+	return UserView{
+		ID:            user.ID,
+		Name:          user.Name,
+		Email:         user.Email,
+		Role:          user.Role,
+		RequestedRole: user.RequestedRole,
+		Status:        user.Status,
+		KYCApproved:   user.KYCApproved,
+		DocumentID:    user.DocumentID,
+		Phone:         user.Phone,
+		WalletAddress: user.WalletAddress,
+		CreatedAt:     user.CreatedAt,
+	}
 }

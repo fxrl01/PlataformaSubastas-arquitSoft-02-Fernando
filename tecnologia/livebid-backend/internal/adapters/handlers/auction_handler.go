@@ -27,24 +27,30 @@ func NewAuctionHandler(catalog *services.AuctionCatalogService, audit ...*servic
 }
 
 type createAuctionRequest struct {
-	Titulo      string    `json:"titulo"`
-	Descripcion string    `json:"descripcion"`
-	PrecioBase  float64   `json:"precio_base"`
-	Inicio      time.Time `json:"inicio"`
-	Cierre      time.Time `json:"cierre"`
+	Titulo       string                   `json:"titulo"`
+	Descripcion  string                   `json:"descripcion"`
+	MartilleroID string                   `json:"martillero_id,omitempty"`
+	PrecioBase   float64                  `json:"precio_base"`
+	Inicio       time.Time                `json:"inicio"`
+	Cierre       time.Time                `json:"cierre"`
+	Encargado    *domain.EncargadoSubasta `json:"encargado,omitempty"`
+	DetallesLote *domain.DetallesLote     `json:"detalles_lote,omitempty"`
 }
 
 type auctionView struct {
-	ID            string               `json:"id"`
-	VendedorID    string               `json:"vendedor_id,omitempty"`
-	Titulo        string               `json:"titulo"`
-	Descripcion   string               `json:"descripcion"`
-	PrecioBase    float64              `json:"precio_base"`
-	PrecioActual  float64              `json:"precio_actual"`
-	PostorLiderID string               `json:"postor_lider_id,omitempty"`
-	Estado        domain.EstadoSubasta `json:"estado"`
-	Inicio        time.Time            `json:"inicio"`
-	Cierre        time.Time            `json:"cierre"`
+	ID            string                  `json:"id"`
+	VendedorID    string                  `json:"vendedor_id,omitempty"`
+	MartilleroID  string                  `json:"martillero_id,omitempty"`
+	Titulo        string                  `json:"titulo"`
+	Descripcion   string                  `json:"descripcion"`
+	PrecioBase    float64                 `json:"precio_base"`
+	PrecioActual  float64                 `json:"precio_actual"`
+	PostorLiderID string                  `json:"postor_lider_id,omitempty"`
+	Estado        domain.EstadoSubasta    `json:"estado"`
+	Inicio        time.Time               `json:"inicio"`
+	Cierre        time.Time               `json:"cierre"`
+	Encargado     domain.EncargadoSubasta `json:"encargado,omitempty"`
+	DetallesLote  domain.DetallesLote     `json:"detalles_lote,omitempty"`
 }
 
 func (h *AuctionHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -63,9 +69,16 @@ func (h *AuctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	subasta, err := h.catalog.Crear(r.Context(), services.CrearSubastaCmd{
-		ID: "sub_" + hex.EncodeToString(idBytes), VendedorID: user.ID,
-		Titulo: request.Titulo, Descripcion: request.Descripcion,
-		PrecioBase: request.PrecioBase, Inicio: request.Inicio, Cierre: request.Cierre,
+		ID:           "sub_" + hex.EncodeToString(idBytes),
+		VendedorID:   user.ID,
+		MartilleroID: request.MartilleroID,
+		Titulo:       request.Titulo,
+		Descripcion:  request.Descripcion,
+		PrecioBase:   request.PrecioBase,
+		Inicio:       request.Inicio,
+		Cierre:       request.Cierre,
+		Encargado:    request.Encargado,
+		DetallesLote: request.DetallesLote,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrSubastaInvalida) {
@@ -76,6 +89,48 @@ func (h *AuctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toAuctionView(subasta))
+}
+
+func (h *AuctionHandler) UpdateEncargado(w http.ResponseWriter, r *http.Request) {
+	var request domain.EncargadoSubasta
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	subasta, err := h.catalog.ActualizarEncargado(r.Context(), r.PathValue("id"), request)
+	if err != nil {
+		if errors.Is(err, domain.ErrSubastaNoEncontrada) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "auction not found"})
+			return
+		}
+		if errors.Is(err, domain.ErrSubastaInvalida) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid encargado data"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, toAuctionView(subasta))
+}
+
+func (h *AuctionHandler) UpdateDetallesLote(w http.ResponseWriter, r *http.Request) {
+	var request domain.DetallesLote
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	subasta, err := h.catalog.ActualizarDetallesLote(r.Context(), r.PathValue("id"), request)
+	if err != nil {
+		if errors.Is(err, domain.ErrSubastaNoEncontrada) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "auction not found"})
+			return
+		}
+		if errors.Is(err, domain.ErrSubastaInvalida) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid lot details data"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, toAuctionView(subasta))
 }
 
 func (h *AuctionHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +161,10 @@ func (h *AuctionHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuctionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	h.transition(w, r, h.catalog.Activar)
+}
+
+func (h *AuctionHandler) StartCountdown(w http.ResponseWriter, r *http.Request) {
+	h.transition(w, r, h.catalog.IniciarConteo)
 }
 
 func (h *AuctionHandler) Close(w http.ResponseWriter, r *http.Request) {
@@ -152,9 +211,18 @@ func (h *AuctionHandler) transition(w http.ResponseWriter, r *http.Request, acti
 
 func toAuctionView(subasta *domain.Subasta) auctionView {
 	return auctionView{
-		ID: subasta.ID, VendedorID: subasta.VendedorID, Titulo: subasta.Titulo,
-		Descripcion: subasta.Descripcion, PrecioBase: subasta.PrecioBase,
-		PrecioActual: subasta.PrecioActual, PostorLiderID: subasta.PostorLiderID,
-		Estado: subasta.Estado, Inicio: subasta.FechaInicio, Cierre: subasta.FechaCierre,
+		ID:            subasta.ID,
+		VendedorID:    subasta.VendedorID,
+		MartilleroID:  subasta.MartilleroID,
+		Titulo:        subasta.Titulo,
+		Descripcion:   subasta.Descripcion,
+		PrecioBase:    subasta.PrecioBase,
+		PrecioActual:  subasta.PrecioActual,
+		PostorLiderID: subasta.PostorLiderID,
+		Estado:        subasta.Estado,
+		Inicio:        subasta.FechaInicio,
+		Cierre:        subasta.FechaCierre,
+		Encargado:     subasta.Encargado,
+		DetallesLote:  subasta.DetallesLote,
 	}
 }

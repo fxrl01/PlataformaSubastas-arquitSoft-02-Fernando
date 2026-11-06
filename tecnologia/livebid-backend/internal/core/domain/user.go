@@ -15,6 +15,15 @@ const (
 	RoleAdmin      UserRole = "ADMIN"
 )
 
+func IsValidRole(role UserRole) bool {
+	switch role {
+	case RoleBidder, RoleSeller, RoleAuctioneer, RoleAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
 type UserStatus string
 
 const (
@@ -24,10 +33,21 @@ const (
 	UserBlocked   UserStatus = "BLOQUEADO"
 )
 
+func IsValidUserStatus(status UserStatus) bool {
+	switch status {
+	case UserPending, UserActive, UserSuspended, UserBlocked:
+		return true
+	default:
+		return false
+	}
+}
+
 var (
 	ErrInvalidEmail        = errors.New("domain: correo inválido")
 	ErrInvalidPassword     = errors.New("domain: contraseña inválida")
 	ErrInvalidUser         = errors.New("domain: usuario inválido")
+	ErrInvalidRole         = errors.New("domain: rol de usuario inválido")
+	ErrInvalidUserStatus   = errors.New("domain: estado de usuario inválido")
 	ErrUserAlreadyExists   = errors.New("domain: usuario ya registrado")
 	ErrUserNotFound        = errors.New("domain: usuario no encontrado")
 	ErrInvalidCredentials  = errors.New("domain: credenciales inválidas")
@@ -36,14 +56,19 @@ var (
 )
 
 type User struct {
-	ID           string
-	Name         string
-	Email        string
-	PasswordHash string
-	Role         UserRole
-	Status       UserStatus
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            string
+	Name          string
+	Email         string
+	PasswordHash  string
+	Role          UserRole
+	RequestedRole UserRole
+	Status        UserStatus
+	KYCApproved   bool
+	DocumentID    string
+	Phone         string
+	WalletAddress string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func NewUser(id, name, email, passwordHash string, now time.Time) (*User, error) {
@@ -55,8 +80,15 @@ func NewUser(id, name, email, passwordHash string, now time.Time) (*User, error)
 		return nil, ErrInvalidUser
 	}
 	return &User{
-		ID: id, Name: strings.TrimSpace(name), Email: email,
-		PasswordHash: passwordHash, Role: RoleBidder, Status: UserPending,
-		CreatedAt: now, UpdatedAt: now,
+		ID:            id,
+		Name:          strings.TrimSpace(name),
+		Email:         email,
+		PasswordHash:  passwordHash,
+		Role:          RoleBidder,
+		RequestedRole: RoleBidder,
+		Status:        UserPending,
+		KYCApproved:   false,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}, nil
 }

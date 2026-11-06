@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -20,11 +21,14 @@ func NewPostgresAuctionRepository(pool *pgxpool.Pool) *PostgresAuctionRepository
 	return &PostgresAuctionRepository{pool: pool}
 }
 
+const auctionSelectColumns = `
+	SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
+		postor_lider_id, estado, fin_programado, created_at, inicio_programado,
+		vendedor_id, martillero_id, COALESCE(encargado_json, '{}'::jsonb), COALESCE(detalles_lote_json, '{}'::jsonb)
+	FROM subastas`
+
 func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string) (*domain.Subasta, error) {
-	const query = `
-		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
-			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
-		FROM subastas WHERE id = $1`
+	query := auctionSelectColumns + ` WHERE id = $1`
 	subasta, err := scanAuction(r.pool.QueryRow(ctx, query, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrSubastaNoEncontrada
@@ -36,10 +40,7 @@ func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string)
 }
 
 func (r *PostgresAuctionRepository) Listar(ctx context.Context) ([]*domain.Subasta, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
-			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
-		FROM subastas ORDER BY created_at DESC`)
+	rows, err := r.pool.Query(ctx, auctionSelectColumns+` ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list auctions: %w", err)
 	}
@@ -60,10 +61,7 @@ func (r *PostgresAuctionRepository) Listar(ctx context.Context) ([]*domain.Subas
 }
 
 func (r *PostgresAuctionRepository) ListarVencidas(ctx context.Context, now time.Time) ([]*domain.Subasta, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
-			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
-		FROM subastas
+	rows, err := r.pool.Query(ctx, auctionSelectColumns+`
 		WHERE estado IN ('ACTIVA', 'EN_CONTEO') AND fin_programado <= $1
 		ORDER BY fin_programado ASC`, now)
 	if err != nil {
@@ -86,23 +84,48 @@ func (r *PostgresAuctionRepository) ListarVencidas(ctx context.Context, now time
 }
 
 func (r *PostgresAuctionRepository) Guardar(ctx context.Context, subasta *domain.Subasta) error {
-	_, err := r.pool.Exec(ctx, `
+	encargadoBytes, err := json.Marshal(subasta.Encargado)
+	if err != nil {
+		return fmt.Errorf("marshal encargado json: %w", err)
+	}
+	detallesBytes, err := json.Marshal(subasta.DetallesLote)
+	if err != nil {
+		return fmt.Errorf("marshal detalles lote json: %w", err)
+	}
+
+	_, err = r.pool.Exec(ctx, `
 		INSERT INTO subastas
-			(id, vendedor_id, titulo, descripcion, precio_base, incremento_minimo,
-			 precio_actual, postor_lider_id, estado, inicio_programado, fin_programado)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			(id, vendedor_id, martillero_id, titulo, descripcion, precio_base, incremento_minimo,
+			 precio_actual, postor_lider_id, estado, inicio_programado, fin_programado,
+			 encargado_json, detalles_lote_json)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb)
 		ON CONFLICT (id) DO UPDATE SET
 			vendedor_id = EXCLUDED.vendedor_id,
+			martillero_id = EXCLUDED.martillero_id,
 			titulo = EXCLUDED.titulo,
 			descripcion = EXCLUDED.descripcion,
 			precio_actual = EXCLUDED.precio_actual,
 			postor_lider_id = EXCLUDED.postor_lider_id,
 			estado = EXCLUDED.estado,
 			inicio_programado = EXCLUDED.inicio_programado,
-			fin_programado = EXCLUDED.fin_programado`,
-		subasta.ID, nullableString(subasta.VendedorID), subasta.Titulo, subasta.Descripcion,
-		subasta.PrecioBase, subasta.CalcularIncrementoMinimo(), subasta.PrecioActual,
-		nullableString(subasta.PostorLiderID), subasta.Estado, subasta.FechaInicio, subasta.FechaCierre)
+			fin_programado = EXCLUDED.fin_programado,
+			encargado_json = EXCLUDED.encargado_json,
+			detalles_lote_json = EXCLUDED.detalles_lote_json`,
+		subasta.ID,
+		nullableString(subasta.VendedorID),
+		nullableString(subasta.MartilleroID),
+		subasta.Titulo,
+		subasta.Descripcion,
+		subasta.PrecioBase,
+		subasta.CalcularIncrementoMinimo(),
+		subasta.PrecioActual,
+		nullableString(subasta.PostorLiderID),
+		subasta.Estado,
+		subasta.FechaInicio,
+		subasta.FechaCierre,
+		string(encargadoBytes),
+		string(detallesBytes),
+	)
 	if err != nil {
 		return fmt.Errorf("save auction: %w", err)
 	}
@@ -115,19 +138,35 @@ type auctionScanner interface {
 
 func scanAuction(row auctionScanner) (*domain.Subasta, error) {
 	var subasta domain.Subasta
-	var vendedorID, liderID, descripcion *string
+	var vendedorID, martilleroID, liderID, descripcion *string
 	var precioBase, incrementoMinimo, precioActual string
+	var encargadoRaw, detallesRaw []byte
 	var createdAt time.Time
 	err := row.Scan(
-		&subasta.ID, &subasta.Titulo, &descripcion, &precioBase, &incrementoMinimo,
-		&precioActual, &liderID, &subasta.Estado, &subasta.FechaCierre, &createdAt,
-		&subasta.FechaInicio, &vendedorID,
+		&subasta.ID,
+		&subasta.Titulo,
+		&descripcion,
+		&precioBase,
+		&incrementoMinimo,
+		&precioActual,
+		&liderID,
+		&subasta.Estado,
+		&subasta.FechaCierre,
+		&createdAt,
+		&subasta.FechaInicio,
+		&vendedorID,
+		&martilleroID,
+		&encargadoRaw,
+		&detallesRaw,
 	)
 	if err != nil {
 		return nil, err
 	}
 	if vendedorID != nil {
 		subasta.VendedorID = *vendedorID
+	}
+	if martilleroID != nil {
+		subasta.MartilleroID = *martilleroID
 	}
 	if descripcion != nil {
 		subasta.Descripcion = *descripcion
@@ -145,6 +184,12 @@ func scanAuction(row auctionScanner) (*domain.Subasta, error) {
 	subasta.PrecioActual, err = strconv.ParseFloat(precioActual, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse current price: %w", err)
+	}
+	if len(encargadoRaw) > 0 {
+		_ = json.Unmarshal(encargadoRaw, &subasta.Encargado)
+	}
+	if len(detallesRaw) > 0 {
+		_ = json.Unmarshal(detallesRaw, &subasta.DetallesLote)
 	}
 	subasta.Pujas = make([]domain.Puja, 0)
 	return &subasta, nil

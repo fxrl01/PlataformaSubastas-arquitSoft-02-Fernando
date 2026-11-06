@@ -2,74 +2,45 @@
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
 > **Capa:** Diseño Interno de Software · **Nivel C4:** 4 – Código  
-> **Estándar:** Software Design Description (SDD) · **Versión:** 1.0
+> **Lenguaje Oficial:** Go 1.23+ · **Versión:** 3.0
 
 ---
 
 ## 1. Objetivo
 
-Documentar los patrones de diseño aplicados en el backend de **LiveBid**, especificando el problema que resuelven, en qué módulo se ubican, la tecnología con la que se implementan y los archivos de código donde residen, garantizando uniformidad y calidad en el desarrollo.
+Documentar los patrones de diseño GoF, de concurrencia y de arquitectura cloud-native implementados en el backend de **LiveBid** ([`tecnologia/livebid-backend`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend)), detallando el problema que resuelven y los archivos exactos donde residen.
 
 ---
 
-## 2. Patrones de Diseño Aplicados
+## 2. Catálogo de Patrones Aplicados en Go
 
-| Patrón | Dónde se usa | Problema que resuelve | Cómo se implementa | Archivos en el código |
+| Patrón | Categoría | Problema que Resuelve en LiveBid | Implementación en Go 1.23+ | Archivos Reales en el Repositorio |
 |---|---|---|---|---|
-| **State (Comportamiento)** | Subastas → Ciclo de vida del lote | Evitar condicionales infinitos (`if/else`) para validar qué operaciones son válidas según el momento de la subasta | Clases de estado que heredan de `EstadoSubasta` (`ActivaState`, `MartilloState`, `AdjudicadaState`) | `dominio/estado-subasta.ts`, `dominio/estados/` |
-| **Observer / Pub-Sub (Comportamiento)** | Motor de Pujas → Clientes en Vivo | Notificar a cientos de postores conectados en la sala sin acoplar el caso de uso con la librería de WebSockets | Puerto `IRoomNotifierPort` + Redis Pub/Sub + Socket.io | `dominio/room-notifier-port.ts`, `infraestructura/websocket-room.adapter.ts` |
-| **Adapter (Estructural)** | Pagos → Pasarela bancaria (Niubiz/Stripe) | La pasarela externa tiene su propio SDK y protocolo que no deben contaminar el dominio | Adaptador que implementa `IPaymentEscrowPort` traduciendo DTOs | `dominio/escrow-port.ts`, `infraestructura/niubiz-escrow.adapter.ts` |
-| **Repository (Estructural)** | Todos los módulos → Base de datos | El negocio no debe conocer tablas, sintaxis SQL ni detalles de PostgreSQL | Interfaz en Dominio implementada con TypeORM / Prisma / pg | `dominio/subasta-repository.ts`, `infraestructura/postgres-subasta.repo.ts` |
-| **Circuit Breaker (Estabilidad)** | Pagos y Servicios Externos (Reniec/KYC) | Si la pasarela de pagos o el servicio de identidad falla, evitar que colapse el backend por timeouts | Librería Opossum / Resilence4j que abre el circuito temporalmente | `infraestructura/circuit-breaker.middleware.ts` |
-| **Command (Comportamiento)** | Presentación → Aplicación | Encapsular la intención de puja como un objeto inmutable para permitir encolamiento FIFO y auditoría | Objeto `ProcesarPujaCommand` validado con tipado estricto | `aplicacion/procesar-puja.command.ts` |
+| **Aggregate Root & State Machine** | Dominio (DDD / Comportamiento) | Evitar estados inconsistentes al validar pujas, extensiones *Anti-Sniping*, cambios a `EN_CONTEO` y cierre. | Struct `Subasta` y tipo `EstadoSubasta` con métodos de transición blindados (`Activar`, `IniciarConteo`, `Cerrar`, `ValidarYRegistrarPuja`). | [`internal/core/domain/auction.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/auction.go), [`auction_state.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/auction_state.go) |
+| **Multiplexed Observer / Pub-Sub Hub** | Concurrencia & Tiempo Real | Evitar abrir $N$ conexiones Redis Pub/Sub cuando $N$ usuarios observan la misma subasta en vivo. | `AuctionRoomHub` suscribe **1 sola vez por sala activa** a Redis y reparte el mensaje a los canales locales de cada socket. | [`internal/adapters/realtime/room_hub.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/realtime/room_hub.go), [`redis_bid_notifier.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/realtime/redis_bid_notifier.go) |
+| **Circuit Breaker con Fallback** | Resiliencia / Estabilidad | Impedir que una caída o latencia $>150\text{ ms}$ en la API de Google Gemini bloquee el *Hot Path* de la subasta. | Máquina de estados atómica (`CLOSED`, `OPEN`, `HALF-OPEN`) que conmuta automáticamente a heurística local determinista. | [`internal/adapters/ai/circuit_breaker.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/ai/circuit_breaker.go), [`gemini_risk_adapter.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/ai/gemini_risk_adapter.go) |
+| **Strategy & Hot-Swap Router** | Comportamiento / IA Exponencial | Permitir cambiar en caliente el modelo de IA (`gemini-2.5-flash` $\leftrightarrow$ `gemini-2.5-pro`) y la estrategia de puja de Agentes IA. | `MultiModelRouter` protegido por `sync.RWMutex` y estrategias de `AgentStrategy` (`CONSERVADORA`, `EQUILIBRADA`, `SNIPER`). | [`internal/adapters/ai/multi_model_router.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/ai/multi_model_router.go), [`domain/ai_agent.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/ai_agent.go) |
+| **Decorator (Read-Through Cache)** | Estructural / Rendimiento | Eliminar la consulta SQL repetitiva a `usuarios` en cada petición HTTP o frame WebSocket autenticado. | `CachedUserRepository` envuelve `UserRepository` con caché en memoria TTL e invalidación inmediata en `UpdateStatus`/`UpdateRole`. | [`internal/adapters/persistence/cached_user_repository.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/persistence/cached_user_repository.go) |
+| **Adapter (Puertos y Adaptadores)** | Estructural | Aislar el dominio de los detalles de PostgreSQL, Redis, firmas Web3 EIP-712 y Smart Contracts EVM. | Implementaciones concretas de `BidSignatureVerifierPort`, `SmartContractEscrowPort`, `EscrowPort` y `BidLockPort`. | [`internal/adapters/web3/eip712_verifier.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/web3/eip712_verifier.go), [`evm_escrow_adapter.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/web3/evm_escrow_adapter.go) |
+| **Cryptographic Hash Chain & Merkle Tree** | Seguridad / Integridad Forense | Garantizar que ninguna puja histórica pueda ser alterada, borrada ni reordenada sin romper la prueba matemática. | Cadena de hashes SHA-256 en PostgreSQL + árbol binario de Merkle (`ComputeMerkleRoot` y `GenerateMerkleProof`). | [`internal/core/domain/web3.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/core/domain/web3.go), [`postgres_bid_repository.go`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/persistence/postgres_bid_repository.go) |
 
 ---
 
-## 3. Detalle Operativo de los Patrones Clave
+## 3. Detalle Operativo de los Patrones Críticos
 
-### 3.1 Patrón State: Ciclo de Vida de la Subasta
-Una subasta pasa por estados estrictos con transiciones controladas:
+### 3.1 Máquina de Estados del Ciclo de Vida de la Subasta
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Programada: Lote creado y publicado
-    Programada --> Activa: Inicio de hora oficial
-    Activa --> EnConteoMartillo: Sin nuevas pujas en ventana de tiempo
-    EnConteoMartillo --> Activa: Entra nueva puja válida (Anti-Sniping)
-    EnConteoMartillo --> MartilloUno: Tiempo agotado 1
-    MartilloUno --> MartilloDos: Tiempo agotado 2
-    MartilloDos --> Adjudicada: Martillazo final (Hay ganador)
-    MartilloDos --> Desierta: No se alcanzó precio de reserva
-    Adjudicada --> Liquidada: Pago completo confirmado
-    Adjudicada --> Cancelada: Postor ganador incumple pago
+    [*] --> PENDIENTE: Crear subasta + Ficha Lote + Encargado
+    PENDIENTE --> ACTIVA: Activar (Martillero / Vendedor / Admin)
+    ACTIVA --> ACTIVA: Puja válida en últimos 15s (Anti-Sniping +30s)
+    ACTIVA --> EN_CONTEO: IniciarConteo (Martillero canta aviso final)
+    EN_CONTEO --> EN_CONTEO: Entra nueva puja válida (+30s Anti-Sniping)
+    ACTIVA --> CERRADA: Cerrar manual o Worker de Expiración
+    EN_CONTEO --> CERRADA: Martillazo final + Anclaje MerkleRoot On-Chain
+    CERRADA --> [*]
 ```
 
-- **Ventaja:** Cada estado encapsula su propio comportamiento. Por ejemplo, en `AdjudicadaState.pujar()`, el método arroja automáticamente `SubastaCerradaError` sin necesidad de evaluar múltiples banderas booleanas.
-
-### 3.2 Patrón Adapter: Aislamiento de Pasarelas de Pago
-- El dominio define la interfaz:
-  ```typescript
-  export interface IPaymentEscrowPort {
-    retenerGarantia(postorId: string, subastaId: string, monto: number): Promise<ResultadoRetencion>;
-    liberarGarantia(retencionId: string): Promise<void>;
-    capturarFondosGanador(retencionId: string): Promise<ResultadoCobro>;
-  }
-  ```
-- Si en el futuro se reemplaza Niubiz por Stripe o Culqi, el caso de uso `ProcesarPujaUseCase` **no sufre ninguna modificación**.
-
-### 3.3 Patrón Observer: Difusión de Precios a Milisegundos
-- Cuando entra una puja válida, el caso de uso publica el evento de dominio `PujaAceptadaEvent`.
-- El adaptador `WebSocketRoomAdapter` escucha este evento y lo serializa hacia el canal de Redis:
-  ```typescript
-  redisClient.publish(`sala:${subastaId}`, JSON.stringify(evento));
-  ```
-- Todos los nodos del cluster reciben el mensaje y emiten el evento `sala:nuevo_precio` a sus respectivos sockets locales en $< 30$ ms.
-
----
-
-## 4. Beneficios para el Proyecto LiveBid
-
-1. **Alta Concurrencia sin Caídas:** El patrón Circuit Breaker y el desacoplamiento Pub-Sub protegen la base de datos central de avalanchas de lecturas.
-2. **Auditabilidad Legal:** El patrón Command garantiza que cada puja quede registrada como una transacción discreta con firma y sello de tiempo.
-3. **Evolución sin Riesgo:** Cambiar la base de datos o el proveedor de pagos es solo cuestión de programar un nuevo adaptador sin tocar el motor de pujas.
-
+### 3.2 Patrón Decorator: `CachedUserRepository` con Invalidación Reactiva
+Cada endpoint protegido verifica que el usuario exista, esté `ACTIVO` y conserve el `Role` declarado en su JWT. Al aplicar el patrón **Decorator** en [`CachedUserRepository`](file:///home/fernando/Softwar_Architect/PlataformaSubastas-arquitSoft-02-Fernando/tecnologia/livebid-backend/internal/adapters/persistence/cached_user_repository.go), las lecturas se sirven desde memoria RAM en microsegundos, pero cualquier cambio administrativo de rol o estado (`UpdateStatus`, `UpdateRole`, `Save`) invalida de inmediato la entrada en caché, combinando **rendimiento extremo** con **revocación Zero-Trust instantánea**.

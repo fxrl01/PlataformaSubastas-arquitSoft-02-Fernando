@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -15,9 +16,30 @@ const (
 	ExtensionAntiSniping = 30 * time.Second
 )
 
+// EncargadoSubasta contiene los datos oficiales del martillero o responsable asignado a la subasta.
+type EncargadoSubasta struct {
+	MartilleroID string `json:"martillero_id,omitempty"`
+	Nombre       string `json:"nombre,omitempty"`
+	Cargo        string `json:"cargo,omitempty"`
+	Licencia     string `json:"licencia,omitempty"`
+	Contacto     string `json:"contacto,omitempty"`
+	Experiencia  string `json:"experiencia,omitempty"`
+}
+
+// DetallesLote encapsula la ficha técnica, pericial y multimedia del bien subastado.
+type DetallesLote struct {
+	Categoria              string            `json:"categoria,omitempty"`
+	Ubicacion              string            `json:"ubicacion,omitempty"`
+	PrecioReserva          float64           `json:"precio_reserva,omitempty"`
+	ImagenesURLs           []string          `json:"imagenes_urls,omitempty"`
+	CertificadoPeritajeURL string            `json:"certificado_peritaje_url,omitempty"`
+	InspeccionadoPor       string            `json:"inspeccionado_por,omitempty"`
+	Especificaciones       map[string]string `json:"especificaciones,omitempty"`
+}
+
 // Subasta es la entidad raíz de agregado (Aggregate Root) del dominio de subastas.
 // Contiene toda la lógica de negocio invariante: validación de pujas, anti-sniping,
-// cálculo de incrementos y gestión de estados.
+// cálculo de incrementos, datos del encargado oficial, ficha del lote y gestión de estados.
 type Subasta struct {
 	// ID es el identificador único de la subasta (UUID v4).
 	ID string
@@ -26,8 +48,9 @@ type Subasta struct {
 	Titulo string
 
 	// Descripcion contiene los detalles del bien o lote en subasta.
-	Descripcion string
-	VendedorID  string
+	Descripcion  string
+	VendedorID   string
+	MartilleroID string
 
 	// PrecioBase es el precio inicial de apertura establecido por el vendedor.
 	PrecioBase float64
@@ -47,6 +70,12 @@ type Subasta struct {
 	// FechaCierre marca el cierre planificado (extensible por anti-sniping).
 	FechaCierre time.Time
 
+	// Encargado almacena los detalles del martillero o responsable oficial del evento.
+	Encargado EncargadoSubasta
+
+	// DetallesLote almacena la ficha técnica, pericial y multimedia del bien.
+	DetallesLote DetallesLote
+
 	// Pujas almacena el historial ordenado de pujas aceptadas.
 	Pujas []Puja
 }
@@ -65,6 +94,38 @@ func NuevaSubasta(id, titulo, descripcion string, precioBase float64, inicio, ci
 		FechaCierre:  cierre,
 		Pujas:        make([]Puja, 0),
 	}
+}
+
+// AsignarEncargado valida y actualiza la información del encargado/martillero de la subasta.
+func (s *Subasta) AsignarEncargado(enc EncargadoSubasta) error {
+	enc.Nombre = strings.TrimSpace(enc.Nombre)
+	enc.MartilleroID = strings.TrimSpace(enc.MartilleroID)
+	enc.Cargo = strings.TrimSpace(enc.Cargo)
+	enc.Licencia = strings.TrimSpace(enc.Licencia)
+	enc.Contacto = strings.TrimSpace(enc.Contacto)
+	enc.Experiencia = strings.TrimSpace(enc.Experiencia)
+
+	if enc.Nombre == "" && enc.MartilleroID == "" {
+		return ErrSubastaInvalida
+	}
+	if enc.MartilleroID != "" {
+		s.MartilleroID = enc.MartilleroID
+	}
+	s.Encargado = enc
+	return nil
+}
+
+// ActualizarDetallesLote valida y actualiza la ficha técnica y pericial del lote.
+func (s *Subasta) ActualizarDetallesLote(det DetallesLote) error {
+	if det.PrecioReserva < 0 {
+		return ErrSubastaInvalida
+	}
+	det.Categoria = strings.TrimSpace(det.Categoria)
+	det.Ubicacion = strings.TrimSpace(det.Ubicacion)
+	det.CertificadoPeritajeURL = strings.TrimSpace(det.CertificadoPeritajeURL)
+	det.InspeccionadoPor = strings.TrimSpace(det.InspeccionadoPor)
+	s.DetallesLote = det
+	return nil
 }
 
 // Activar cambia el estado de la subasta a ACTIVA si está en PENDIENTE.
@@ -115,12 +176,6 @@ func (s *Subasta) ExtenderTiempo() {
 // ValidarYRegistrarPuja ejecuta todas las reglas de negocio para aceptar o rechazar
 // una nueva puja. Si es válida, la registra en el historial y retorna la puja creada
 // junto con un indicador de si se activó la extensión anti-sniping.
-//
-// Reglas validadas:
-//  1. La subasta debe estar en estado ACTIVA o EN_CONTEO.
-//  2. El postor no puede ser el mismo que el líder actual.
-//  3. El monto debe ser >= precioActual + incrementoMínimo.
-//  4. Si cae en los últimos 15 segundos, extiende el cierre +30s.
 func (s *Subasta) ValidarYRegistrarPuja(pujaID, postorID string, monto float64, ahora time.Time) (*Puja, bool, error) {
 	// 1. Verificar estado
 	if !s.Estado.EsAceptandoPujas() {

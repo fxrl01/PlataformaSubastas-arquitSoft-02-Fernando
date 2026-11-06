@@ -1,95 +1,98 @@
 # Nivel 3 · Diagrama de componentes — LiveBid
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
-> **Contenedor Detallado:** Go Backend Core & Realtime Engine  
-> **Modelo:** C4 · Nivel 3 de 4 · **Versión:** 2.0 (Arquitectura Limpia en Go)  
+> **Contenedor Detallado:** `livebid-api-server` (Go 1.23+ Hexagonal Backend)  
+> **Modelo:** C4 · Nivel 3 de 4 · **Versión:** 3.0  
 > **Estándar:** Software Design Description (SDD)
 
 ---
 
 ## 1. Objetivo
 
-Abrir el contenedor central de backend de LiveBid desarrollado en **Go (Golang)** y detallar sus **componentes internos**: paquetes modulares bajo Clean Architecture, la responsabilidad de cada uno, sus contratos (interfaces idiomáticas de Go) y cómo interactúan mediante Goroutines, Canales y conexiones hacia PostgreSQL, Redis y APIs externas.
-
-| Aspecto | Descripción |
-|---|---|
-| **Pregunta que responde** | ¿Cómo se estructuran internamente los módulos del backend en Go y qué interfaces/puertos exponen? |
-| **Audiencia** | Arquitectos de software, líderes técnicos, desarrolladores de Go y evaluadores de arquitectura |
-| **Qué es un componente en C4** | Un paquete o módulo cohesionado en Go con interfaces (`ports`) claramente desacopladas |
-| **Nivel anterior** | `Nivel2-DiagramadeContenedores.md` |
-| **Siguiente nivel** | `Nivel4-DiagramadeCodigo.md` |
+Abrir el contenedor principal **`livebid-api-server`** y mostrar todos sus **componentes internos en Go**, cómo se conectan a través de interfaces de dominio (`ports.go`) y cómo integran las capas de **Tiempo Real (`AuctionRoomHub`)**, **RBAC con Caché**, **Web3 (`EIP-712` + `MerkleTree`)** e **IA Exponencial (`MultiModelRouter` + `CircuitBreaker` + `AsyncAnomalyDetector` + `AgentDelegationService`)**.
 
 ---
 
-## 2. Diagrama de Componentes (C4 Nivel 3 — Go Engine)
+## 2. Diagrama de Componentes (C4 Nivel 3)
 
 ```mermaid
 graph TD
-    classDef comp fill:#00ADD8,stroke:#007D9C,color:#000000,stroke-width:2px;
-    classDef db fill:#1C5A96,stroke:#0B4884,color:#ffffff,stroke-width:2px;
-    classDef redis fill:#DC382D,stroke:#9C1F17,color:#ffffff,stroke-width:2px;
-    classDef ext fill:#64748B,stroke:#475569,color:#ffffff,stroke-width:2px;
-    classDef ai fill:#6366F1,stroke:#4338CA,color:#ffffff,stroke-width:2px;
+    classDef handler fill:#1E293B,stroke:#38BDF8,color:#ffffff,stroke-width:2px;
+    classDef service fill:#082F49,stroke:#0EA5E9,color:#ffffff,stroke-width:2px;
+    classDef domain fill:#14532D,stroke:#22C55E,color:#ffffff,stroke-width:2px;
+    classDef adapter fill:#334155,stroke:#94A3B8,color:#ffffff,stroke-width:2px;
+    classDef ai fill:#312E81,stroke:#818CF8,color:#ffffff,stroke-width:2px;
+    classDef web3 fill:#3B0764,stroke:#C084FC,color:#ffffff,stroke-width:2px;
 
-    ClientWS["🌐 Conexión WebSocket (Next.js)"]
-    ClientHTTP["🌐 Petición HTTP / REST (Next.js)"]
+    subgraph GoContainer["Contenedor: livebid-api-server (Go 1.23+ Hexagonal Architecture)"]
+        direction TB
 
-    subgraph GoBackend["Contenedor: Go Backend Core & Realtime Engine (Clean Architecture)"]
-        WSHub["⚡ Componente: WebSocket Hub & Room Manager<br><i>[pkg: adapters/websocket]</i><br>Goroutines concurrentes para lectura/escritura, channels de broadcast y aislamiento por sala"]:::comp
-        AuthComp["🔒 Componente: Auth & Security Interceptor<br><i>[pkg: adapters/http/middleware]</i><br>Validación de JWT claims, RBAC (postor, martillero, admin) y estado KYC"]:::comp
-        AuctionService["🔨 Componente: Motor de Subastas (Auction Service)<br><i>[pkg: core/services/auction_service]</i><br>Orquesta el caso de uso: incremento por tramo, regla anti-sniping y martillazo"]:::comp
-        DomainModel["💎 Entidades de Dominio Invariables<br><i>[pkg: core/domain]</i><br>Subasta (Aggregate Root), Puja (Value Object), TramoIncremento, EstadoSubasta"]:::comp
-        EscrowService["💰 Componente: Pagos y Custodia (Escrow Service)<br><i>[pkg: core/services/escrow_service]</i><br>Validación de fondos congelados antes de pujar y captura al cierre"]:::comp
-        CircuitBreakerComp["🛡️ Componente: Circuit Breaker & Risk Adapter<br><i>[pkg: adapters/ai/gemini_adapter]</i><br>Consulta asíncrona a Gemini AI con conmutación local por timeout (>150ms)"]:::comp
+        subgraph DrivingAdapters["Adaptadores Primarios (internal/adapters/handlers & realtime)"]
+            AuthH["🔒 AuthHandler & RBAC Middleware<br><i>/auth/*, /admin/users/* (Roles, KYC, Estado)</i>"]:::handler
+            AuctionH["🏛️ AuctionHandler<br><i>/subastas/*, /encargado, /detalles-lote, /auditoria-web3</i>"]:::handler
+            BidEscrowH["💰 BidHandler & EscrowHandler<br><i>/pujas (Idempotency + EIP-712), /garantias</i>"]:::handler
+            AgentAIH["🤖 AgentAIHandler<br><i>/agentes-ia/*, /inteligencia-ia, /admin/ia/modelo</i>"]:::handler
+            RoomHub["📡 WebSocketHandler + AuctionRoomHub<br><i>Multiplexación O(1): 1 Suscripción Redis por Sala</i>"]:::handler
+        end
+
+        subgraph ApplicationServices["Servicios de Aplicación (internal/core/services)"]
+            AuthSvc["AuthService<br><i>Registro, Login, Roles RBAC, KYC</i>"]:::service
+            CatalogSvc["AuctionCatalogService<br><i>Ciclo Subasta, EncargadoSubasta, DetallesLote</i>"]:::service
+            AuctionSvc["AuctionService<br><i>ProcesarPuja Atómica & CerrarVencidas</i>"]:::service
+            EscrowSvc["EscrowService<br><i>Retención y Validación de Garantías</i>"]:::service
+            Web3AuditSvc["Web3AuditService<br><i>MerkleRoot, MerkleProof y Recibo On-Chain</i>"]:::service
+            AgentDelegationSvc["AgentDelegationService<br><i>Auto-Puja IA con Techo max_cap</i>"]:::service
+        end
+
+        subgraph CoreDomain["Núcleo de Dominio Puro (internal/core/domain)"]
+            DomainEntities["💎 Entidades e Invariantes<br><i>Subasta, EncargadoSubasta, DetallesLote, Puja, User, MerkleTree, AgentGrant</i>"]:::domain
+        end
+
+        subgraph DrivenAdapters["Adaptadores Secundarios (internal/adapters/*)"]
+            CachedUserRepo["⚡ CachedUserRepository<br><i>Decorador RAM TTL + Invalidación Reactiva</i>"]:::adapter
+            PGRepos["🗄️ Postgres Repositories (pgxpool)<br><i>User, Auction (ListarVencidas), Bid (FOR UPDATE + SHA-256), Escrow</i>"]:::adapter
+            RedisAdapters["🧠 RedisLockAdapter & RedisBidNotifier<br><i>SETNX + Lua Unlock + Pub/Sub</i>"]:::adapter
+            AIRouterComp["🔀 MultiModelRouter + CircuitBreaker (150ms)<br><i>GeminiRiskAdapter + Fallback Heurístico</i>"]:::ai
+            AnomalyComp["🔎 AsyncAnomalyDetector<br><i>Worker Canal: Bot Sniping, Wash Trading, Shill Bidding</i>"]:::ai
+            Web3Adapters["⛓️ EIP712Verifier & EVMEscrowAdapter<br><i>Firmas Criptográficas y Liquidación On-Chain</i>"]:::web3
+        end
     end
 
-    RedisDB[("🧠 Redis 7.2 (Locks & Pub/Sub)")]:::redis
-    PostgresDB[("🗄️ PostgreSQL 16 (Persistencia ACID)")]:::db
-    RabbitMQQueue[("📨 RabbitMQ (Broker de Eventos)")]:::db
-    PasarelaNiubiz["🏛️ Pasarela Niubiz / Stripe"]:::ext
-    GeminiAPI["🤖 Google Gemini AI"]:::ai
+    AuthH --> AuthSvc
+    AuctionH --> CatalogSvc
+    AuctionH --> Web3AuditSvc
+    BidEscrowH --> AuctionSvc
+    BidEscrowH --> EscrowSvc
+    AgentAIH --> AgentDelegationSvc
+    AgentAIH --> AnomalyComp
+    AgentAIH --> AIRouterComp
+    RoomHub --> RedisAdapters
 
-    ClientWS -->|puja:emitir con JWT| WSHub
-    ClientHTTP -->|POST /api/v1/...| AuthComp
+    AgentDelegationSvc --> AuctionSvc
+    AuthSvc & CatalogSvc & AuctionSvc & EscrowSvc & Web3AuditSvc & AgentDelegationSvc --> DomainEntities
 
-    WSHub -->|Verifica autorización| AuthComp
-    WSHub -->|Ejecuta caso de uso| AuctionService
-
-    AuthComp --> AuctionService
-    AuthComp --> EscrowService
-
-    AuctionService -->|Manipula invariantes| DomainModel
-    AuctionService -->|Verifica saldo en garantía| EscrowService
-    AuctionService -->|Solicita lock atómico SETNX| RedisDB
-    AuctionService -->|Publica evento en canal Pub/Sub| RedisDB
-    AuctionService -->|Encola evento para persistencia| RabbitMQQueue
-    AuctionService -->|Evalúa score de riesgo| CircuitBreakerComp
-
-    CircuitBreakerComp -->|Llamada gRPC/REST con timeout| GeminiAPI
-
-    RedisDB -.->|Broadcast a través de channels de Go| WSHub
-    RabbitMQQueue -->|Worker asíncrono en segundo plano| PostgresDB
-
-    EscrowService -->|Hold / Capture fondos| PasarelaNiubiz
+    AuthSvc --> CachedUserRepo
+    CachedUserRepo --> PGRepos
+    CatalogSvc & AuctionSvc & EscrowSvc & Web3AuditSvc --> PGRepos
+    AuctionSvc --> RedisAdapters
+    AuctionSvc --> AIRouterComp
+    AuctionSvc --> AnomalyComp
+    AuctionSvc --> Web3Adapters
+    Web3AuditSvc --> Web3Adapters
 ```
 
 ---
 
-## 3. Catálogo de Componentes en Go
+## 3. Catálogo de Componentes Internos en Go
 
-| Componente | Paquete Go (`package`) | Responsabilidad Principal | Mecanismo de Concurrencia |
-|---|---|---|---|
-| **WebSocket Hub** | `adapters/websocket` | Administra la conexión bidireccional de cada cliente. Agrupa postores por `subastaID` en mapas protegidos con `sync.RWMutex`. | Goroutine individual por socket (`readPump` y `writePump`) comunicadas vía Canales (`chan []byte`). |
-| **Auth & Security** | `adapters/http/middleware` | Decodificación y validación de tokens JWT en el handshake de WebSocket y endpoints REST. Verifica el flag de verificación KYC. | Middleware stateless evaluado en $pprox 0.1$ ms. |
-| **Motor de Subastas (Service)** | `core/services` | Implementa el caso de uso `ProcesarPuja`. Invoca las interfaces (`ports`) de bloqueo atómico, validación de reglas en la entidad y difusión de resultados. | Ejecución síncrona dentro del lock distribuido de Redis para garantizar orden estricto. |
-| **Entidades de Dominio** | `core/domain` | Estructuras puras (`struct`) sin dependencias externas. Contienen la lógica de negocio: cálculo del incremento mínimo, extensión de tiempo por anti-sniping y validación de estado. | Invariables de memoria sin I/O. |
-| **Custodia y Garantías** | `core/services` | Garantiza que un usuario no puje si no tiene un depósito en garantía activo que respalde su oferta. | Interfaz `EscrowPort` desacoplada del proveedor bancario. |
-| **Circuit Breaker IA** | `adapters/ai` | Monitorea la latencia y disponibilidad de la API de Gemini. Si Gemini tarda más de 150 ms o falla consecutivamente, abre el circuito y activa una heurística en memoria para no frenar la subasta en vivo. | Goroutine periódica de sondeo y estado atómico (`sync/atomic`). |
-
----
-
-## 4. Trazabilidad con Requisitos y Drivers Arquitectónicos
-
-- **DA01 — Escalabilidad & DA03 — Rendimiento:** El uso de Goroutines y Canales en el `WebSocket Hub` permite atender más de 10,000 conexiones concurrentes consumiendo menos de 40 MB de RAM.
-- **DA02 — Integridad & Orden Verificable:** La coordinación entre `Auction Service` y `Redis Locks` garantiza que dos ofertas simultáneas se resuelvan en orden estricto de llegada al milisegundo (cero colisiones).
-- **DA06 — Seguridad y Fraude:** El `Circuit Breaker & Risk Adapter` evalúa patrones anómalos de pujas con **Gemini AI** sin poner en riesgo la disponibilidad de la plataforma en caso de fallos externos.
+| Componente | Paquete (`internal/...`) | Responsabilidad Técnica |
+|---|---|---|
+| **`AuthHandler` + `AuthService`** | `adapters/handlers`, `core/services` | Registro, emisión de JWT/Refresh Tokens, bootstrap de Admin inicial y gestión RBAC (`GET /admin/users`, cambio de rol `POSTOR`/`VENDEDOR`/`MARTILLERO`/`ADMIN`, cambio de estado y aprobación KYC). |
+| **`CachedUserRepository`** | `adapters/persistence` | Decorador concurrente (`sync.RWMutex`) sobre `PostgresUserRepository` que resuelve `FindByID` en memoria y purga la entrada instantáneamente ante cambios de rol o estado. |
+| **`AuctionHandler` + `AuctionCatalogService`** | `adapters/handlers`, `core/services` | Creación de subastas, carga/actualización del **`EncargadoSubasta`** (martillero responsable, licencia, contacto) y **`DetallesLote`** (categoría, reserva, ubicación, fotos, peritaje), activación, paso a `EN_CONTEO` y cierre. |
+| **`AuctionService`** | `core/services` | Orquesta el caso de uso crítico `ProcesarPuja` (Lock Redis $\rightarrow$ Firma EIP-712 $\rightarrow$ Escrow $\rightarrow$ Riesgo IA $\rightarrow$ Reglas Dominio $\rightarrow$ Persistencia Atómica SHA-256 $\rightarrow$ Broadcast + Telemetría) y `CerrarVencidas`. |
+| **`AuctionRoomHub`** | `adapters/realtime` | Multiplexor de salas WebSocket que mantiene 1 única suscripción Redis Pub/Sub por subasta activa y distribuye los frames JSON a todos los clientes locales. |
+| **`MultiModelRouter` + `CircuitBreaker`** | `adapters/ai` | Permite conmutar modelos de IA en caliente y protege la latencia de la puja con un corte a los $150\text{ ms}$ y heurística local de respaldo. |
+| **`AsyncAnomalyDetector`** | `adapters/ai` | Analiza las pujas en una goroutine separada para identificar ráfagas sobrehumanas (*Bot Sniping*), ping-pong colusorio (*Wash Trading*) e inflado artificial (*Shill Bidding*). |
+| **`AgentDelegationService`** | `core/services` | Registra mandatos de auto-puja por postor y ejecuta incrementos tácticos respetando el techo presupuestario `max_cap`. |
+| **`Web3AuditService` + `EIP712Verifier` + `EVMEscrowAdapter`** | `core/services`, `adapters/web3` | Verifica firmas tipadas EIP-712, calcula la `MerkleRoot` del historial de pujas, genera `MerkleProof` por índice y liquida el colateral en Smart Contract al cierre. |
