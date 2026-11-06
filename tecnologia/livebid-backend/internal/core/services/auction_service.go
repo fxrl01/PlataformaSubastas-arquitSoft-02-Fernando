@@ -38,10 +38,12 @@ type AuctionService struct {
 }
 
 type AuctionCatalogService struct {
-	repo       domain.SubastaRepository
-	guarantees domain.GuaranteeRepository
-	notifier   domain.BidNotifierPort
-	now        func() time.Time
+	repo             domain.SubastaRepository
+	guarantees       domain.GuaranteeRepository
+	notifier         domain.BidNotifierPort
+	auditRepo        domain.AuditTrailRepository
+	blockchainEscrow domain.BlockchainEscrowPort
+	now              func() time.Time
 }
 
 type CrearSubastaCmd struct {
@@ -64,6 +66,12 @@ func NuevoAuctionCatalogServiceConGarantias(repo domain.SubastaRepository, guara
 
 func NuevoAuctionCatalogServiceConGarantiasYNotificador(repo domain.SubastaRepository, guarantees domain.GuaranteeRepository, notifier domain.BidNotifierPort) *AuctionCatalogService {
 	return &AuctionCatalogService{repo: repo, guarantees: guarantees, notifier: notifier, now: time.Now}
+}
+
+func (s *AuctionCatalogService) WithWeb3Settlement(auditRepo domain.AuditTrailRepository, escrow domain.BlockchainEscrowPort) *AuctionCatalogService {
+	s.auditRepo = auditRepo
+	s.blockchainEscrow = escrow
+	return s
 }
 
 func (s *AuctionCatalogService) Crear(ctx context.Context, cmd CrearSubastaCmd) (*domain.Subasta, error) {
@@ -117,6 +125,20 @@ func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {
 			return fmt.Errorf("settle auction guarantees: %w", err)
 		}
 	}
+	if s.auditRepo != nil && s.blockchainEscrow != nil {
+		hashes, err := s.auditRepo.ObtenerHashesAuditoria(ctx, subasta.ID)
+		if err != nil {
+			return fmt.Errorf("load audit hashes for merkle root: %w", err)
+		}
+		merkleRoot := domain.ComputeMerkleRoot(hashes)
+		receipt, err := s.blockchainEscrow.SettleEscrowAndAnchorMerkleRoot(ctx, subasta.ID, subasta.PostorLiderID, subasta.PrecioActual, merkleRoot)
+		if err != nil {
+			return fmt.Errorf("anchor merkle root onchain: %w", err)
+		}
+		if err := s.auditRepo.GuardarReciboOnChain(ctx, receipt); err != nil {
+			return fmt.Errorf("persist onchain settlement receipt: %w", err)
+		}
+	}
 	if s.notifier != nil {
 		var winner *domain.Puja
 		if subasta.PostorLiderID != "" {
@@ -133,7 +155,13 @@ func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {
 }
 
 func (s *AuctionCatalogService) CerrarVencidas(ctx context.Context, now time.Time) (int, error) {
-	auctions, err := s.repo.Listar(ctx)
+	var auctions []*domain.Subasta
+	var err error
+	if finder, ok := s.repo.(domain.ExpiredSubastaRepository); ok {
+		auctions, err = finder.ListarVencidas(ctx, now)
+	} else {
+		auctions, err = s.repo.Listar(ctx)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("list expired auctions: %w", err)
 	}

@@ -7,81 +7,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/fxrl01/livebid-backend/internal/adapters/ai"
 	"github.com/fxrl01/livebid-backend/internal/adapters/handlers"
 	"github.com/fxrl01/livebid-backend/internal/adapters/persistence"
 	"github.com/fxrl01/livebid-backend/internal/adapters/realtime"
 	"github.com/fxrl01/livebid-backend/internal/adapters/security"
+	"github.com/fxrl01/livebid-backend/internal/adapters/web3"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
-
-// InMemorySubastaRepo es una implementación ligera en memoria para desarrollo local.
-type InMemorySubastaRepo struct {
-	subastas map[string]*domain.Subasta
-}
-
-func (r *InMemorySubastaRepo) ObtenerPorID(_ context.Context, id string) (*domain.Subasta, error) {
-	s, ok := r.subastas[id]
-	if !ok {
-		return nil, domain.ErrSubastaNoEncontrada
-	}
-	return s, nil
-}
-
-func (r *InMemorySubastaRepo) Guardar(_ context.Context, s *domain.Subasta) error {
-	r.subastas[s.ID] = s
-	return nil
-}
-
-func (r *InMemorySubastaRepo) Listar(_ context.Context) ([]*domain.Subasta, error) {
-	result := make([]*domain.Subasta, 0, len(r.subastas))
-	for _, subasta := range r.subastas {
-		result = append(result, subasta)
-	}
-	return result, nil
-}
-
-// LocalLockAdapter implementa BidLockPort localmente.
-type LocalLockAdapter struct{}
-
-func (l *LocalLockAdapter) AdquirirLock(_ context.Context, _ string, _ time.Duration) (domain.UnlockFunc, error) {
-	return func() error { return nil }, nil
-}
-
-// LocalEscrowAdapter implementa PaymentEscrowPort.
-type LocalEscrowAdapter struct{}
-
-func (e *LocalEscrowAdapter) ValidarGarantiaActiva(_ context.Context, _, _ string) (bool, error) {
-	return true, nil
-}
-func (e *LocalEscrowAdapter) RetenerGarantia(_ context.Context, _, _ string, _ float64) error {
-	return nil
-}
-func (e *LocalEscrowAdapter) LiberarGarantia(_ context.Context, _, _ string) error {
-	return nil
-}
-
-// LocalNotifierAdapter implementa RoomNotifierPort.
-type LocalNotifierAdapter struct{}
-
-func (n *LocalNotifierAdapter) BroadcastNuevaPuja(_ context.Context, subastaID string, p domain.Puja, extension bool) error {
-	log.Printf("[WSS BROADCAST] Sala: %s | Nueva Puja: $%.2f por %s (Anti-Sniping extendido: %t)", subastaID, p.Monto, p.PostorID, extension)
-	return nil
-}
-
-func (n *LocalNotifierAdapter) BroadcastSubastaCerrada(_ context.Context, subastaID string, ganadora *domain.Puja) error {
-	if ganadora != nil {
-		log.Printf("[WSS BROADCAST] Sala: %s | ADJUDICADA a %s por $%.2f", subastaID, ganadora.PostorID, ganadora.Monto)
-	} else {
-		log.Printf("[WSS BROADCAST] Sala: %s | Subasta CERRADA DESIERTA", subastaID)
-	}
-	return nil
-}
 
 func main() {
 	log.Println("=================================================================")
@@ -89,31 +30,7 @@ func main() {
 	log.Println(" Optimizado para AWS Free Tier (< 30 MB RAM, Latencia < 5ms)")
 	log.Println("=================================================================")
 
-	// 1. Inicializar Repositorio y Datos Semilla
-	repo := &InMemorySubastaRepo{
-		subastas: make(map[string]*domain.Subasta),
-	}
-
-	ahora := time.Now()
-	subastaDemo := domain.NuevaSubasta(
-		"sub-demo-01",
-		"Patek Philippe Grandmaster Chime 6300G",
-		"Reloj exclusivo de alta complicacion en oro blanco",
-		250000.0,
-		ahora,
-		ahora.Add(2*time.Hour),
-	)
-	_ = subastaDemo.Activar()
-	_ = repo.Guardar(context.Background(), subastaDemo)
-
-	// 2. Inyección de Dependencias del motor de subastas
-	lock := &LocalLockAdapter{}
-	escrow := &LocalEscrowAdapter{}
-	notifier := &LocalNotifierAdapter{}
-
-	_ = services.NuevoAuctionService(repo, lock, escrow, notifier, nil)
-
-	// 3. PostgreSQL y autenticación
+	// 1. Conexión a PostgreSQL
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -129,42 +46,94 @@ func main() {
 		log.Fatalf("ping database: %v", err)
 	}
 
-	jwtIssuer, err := security.NewJWTIssuer(os.Getenv("JWT_SECRET"))
-	if err != nil {
-		log.Fatalf("configure jwt: %v", err)
-	}
-	userRepository := persistence.NewPostgresUserRepository(pool)
-	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
-	bidRepository := persistence.NewPostgresBidRepository(pool)
-	guaranteeRepository := persistence.NewPostgresGuaranteeRepository(pool)
+	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("ping redis: %v", err)
 	}
+
+	// 3. Seguridad, Repositorios y Caché TTL
+	jwtIssuer, err := security.NewJWTIssuer(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		log.Fatalf("configure jwt: %v", err)
+	}
+	userRepository := persistence.NewCachedUserRepository(
+		persistence.NewPostgresUserRepository(pool),
+		30*time.Second,
+	)
+	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
+	bidRepository := persistence.NewPostgresBidRepository(pool)
+	guaranteeRepository := persistence.NewPostgresGuaranteeRepository(pool)
 	bidLock := persistence.NewRedisBidLock(redisClient)
 	bidNotifier := realtime.NewRedisBidNotifier(redisClient)
+
+	// 4. Gateway Multi-Modelo de IA + Circuit Breaker + Detector Asíncrono + Capa Web3
+	failThreshold := envInt("CIRCUIT_BREAKER_FAIL_THRESHOLD", 3)
+	cbTimeout := time.Duration(envInt("CIRCUIT_BREAKER_TIMEOUT_MS", 2000)) * time.Millisecond
+	geminiProvider := ai.NewGeminiRiskAdapter(os.Getenv("GEMINI_API_KEY"))
+	riskBreaker := ai.NewCircuitBreakerIA(geminiProvider, failThreshold, 3*time.Second, cbTimeout)
+
+	aiRouter := ai.NewMultiModelRouter("gemini-2.5-flash", riskBreaker, time.Minute)
+	aiRouter.RegisterModel("gemini-2.5-pro-forensic", riskBreaker)
+	fraudDetector := ai.NewAsyncFraudDetector(aiRouter)
+
+	chainID := int64(envInt("WEB3_CHAIN_ID", 8453))
+	escrowContract := os.Getenv("WEB3_ESCROW_CONTRACT")
+	eip712Verifier := web3.NewEIP712Verifier(chainID, escrowContract)
+	blockchainEscrow := web3.NewEVMEscrowAdapter(chainID, escrowContract, os.Getenv("WEB3_RPC_URL"))
+
+	// 5. Servicios de Aplicación y Adaptadores HTTP / WebSocket
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
 		jwtIssuer,
 		persistence.NewPostgresRefreshTokenStore(pool),
 	)
+	catalogService := services.NuevoAuctionCatalogServiceConGarantiasYNotificador(
+		auctionRepository,
+		guaranteeRepository,
+		bidNotifier,
+	).WithWeb3Settlement(bidRepository, blockchainEscrow)
+	bidService := services.NewAuctionBidServiceWithNotifierAndGuarantee(
+		auctionRepository,
+		bidRepository,
+		bidLock,
+		bidNotifier,
+		guaranteeRepository,
+	).WithWeb3Verifier(eip712Verifier).WithFraudTelemetry(fraudDetector)
+	guaranteeService := services.NewGuaranteeService(auctionRepository, guaranteeRepository, aiRouter).
+		WithBlockchainEscrow(blockchainEscrow)
+	bidHistoryService := services.NewBidHistoryService(auctionRepository, bidRepository)
+	web3AuditService := services.NewWeb3AuditService(auctionRepository, bidRepository)
+	agentDelegationService := services.NewAgentDelegationService(auctionRepository, bidService)
+
 	authHandler := handlers.NewAuthHandler(authService)
-	auctionHandler := handlers.NewAuctionHandler(services.NuevoAuctionCatalogServiceConGarantiasYNotificador(auctionRepository, guaranteeRepository, bidNotifier))
-	bidService := services.NewAuctionBidServiceWithNotifierAndGuarantee(auctionRepository, bidRepository, bidLock, bidNotifier, guaranteeRepository)
+	auctionHandler := handlers.NewAuctionHandler(catalogService, web3AuditService)
 	bidHandler := handlers.NewBidHandler(bidService)
-	bidHistoryHandler := handlers.NewBidHistoryHandler(services.NewBidHistoryService(auctionRepository, bidRepository))
-	guaranteeHandler := handlers.NewGuaranteeHandler(services.NewGuaranteeService(auctionRepository, guaranteeRepository))
+	bidHistoryHandler := handlers.NewBidHistoryHandler(bidHistoryService)
+	guaranteeHandler := handlers.NewGuaranteeHandler(guaranteeService)
+	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector)
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
-	// 4. Router HTTP estándar de Go
+	// 6. Router HTTP estándar de Go
 	mux := http.NewServeMux()
+
+	publicDir := resolvePublicDir()
+	if publicDir != "" {
+		fileServer := http.FileServer(http.Dir(publicDir))
+		mux.Handle("GET /{$}", fileServer)
+		mux.Handle("GET /index.html", fileServer)
+		mux.Handle("GET /styles.css", fileServer)
+		mux.Handle("GET /app.js", fileServer)
+	}
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"UP","engine":"Go 1.23","architecture":"Clean/Hexagonal"}`))
+		resp := fmt.Sprintf(`{"status":"UP","engine":"Go 1.23","architecture":"Clean/Hexagonal","circuit_breaker_ia":"%s","active_ai_model":"%s","web3_chain_id":%d}`,
+			riskBreaker.State(), aiRouter.ActiveModel(), chainID)
+		_, _ = w.Write([]byte(resp))
 	})
 
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
@@ -174,9 +143,14 @@ func main() {
 	mux.Handle("PATCH /api/v1/admin/users/{id}/activate",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authHandler.ActivateUser))))
+	mux.Handle("PATCH /api/v1/admin/ia/modelo",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleAdmin, domain.RoleAuctioneer)(http.HandlerFunc(agentAIHandler.SwitchModel))))
 	mux.HandleFunc("GET /api/v1/subastas", auctionHandler.List)
 	mux.HandleFunc("GET /api/v1/subastas/{id}", auctionHandler.Get)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/pujas", bidHistoryHandler.List)
+	mux.HandleFunc("GET /api/v1/subastas/{id}/auditoria-web3", auctionHandler.AuditWeb3)
+	mux.HandleFunc("GET /api/v1/subastas/{id}/inteligencia-ia", agentAIHandler.IntelligenceReport)
 	mux.Handle("POST /api/v1/subastas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleSeller)(http.HandlerFunc(auctionHandler.Create))))
@@ -192,15 +166,13 @@ func main() {
 	mux.Handle("POST /api/v1/subastas/{id}/garantias",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(guaranteeHandler.Create))))
+	mux.Handle("POST /api/v1/subastas/{id}/agentes-ia/delegar",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(agentAIHandler.Delegate))))
+	mux.Handle("POST /api/v1/subastas/{id}/agentes-ia/auto-puja",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(agentAIHandler.AutoBid))))
 	mux.Handle("GET /ws/subastas/{id}", webSocketHandler)
-
-	mux.HandleFunc("GET /api/v1/subastas/demo", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		sub, _ := repo.ObtenerPorID(r.Context(), "sub-demo-01")
-		resp := fmt.Sprintf(`{"id":"%s","titulo":"%s","precio_actual":%.2f,"estado":"%s"}`,
-			sub.ID, sub.Titulo, sub.PrecioActual, sub.Estado)
-		_, _ = w.Write([]byte(resp))
-	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -209,18 +181,20 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      withCORS(mux),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
-	// 5. Graceful Shutdown
+	// 7. Reconciliación inicial y Scheduler de Cierre Automático
 	schedulerContext, cancelScheduler := context.WithCancel(context.Background())
 	defer cancelScheduler()
-	go services.NewAuctionScheduler(
-		services.NuevoAuctionCatalogServiceConGarantiasYNotificador(auctionRepository, guaranteeRepository, bidNotifier),
-		10*time.Second,
-	).Run(schedulerContext)
+	if closed, err := catalogService.CerrarVencidas(schedulerContext, time.Now()); err != nil {
+		log.Printf("advertencia al reconciliar subastas vencidas al inicio: %v", err)
+	} else if closed > 0 {
+		log.Printf("Reconciliación inicial: %d subasta(s) vencida(s) cerrada(s) y liquidada(s)", closed)
+	}
+	go services.NewAuctionScheduler(catalogService, 10*time.Second).Run(schedulerContext)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -246,6 +220,19 @@ func main() {
 	log.Println(" Servidor LiveBid cerrado exitosamente.")
 }
 
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, X-Web3-Wallet, X-Web3-Signature, X-Web3-Nonce, X-Web3-Deadline, X-AI-Agent-Mandate")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func redisAddr(rawURL string) string {
 	if rawURL == "" {
 		return "localhost:6379"
@@ -255,4 +242,30 @@ func redisAddr(rawURL string) string {
 		return rawURL[len(prefix):]
 	}
 	return rawURL
+}
+
+func envInt(key string, fallback int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(val)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func resolvePublicDir() string {
+	candidates := []string{
+		"/app/public",
+		"public",
+		filepath.Join("..", "boilerplate-clean-arquitecture", "public"),
+	}
+	for _, dir := range candidates {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	return ""
 }

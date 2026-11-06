@@ -3,19 +3,26 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 )
 
+type MandateValidatorFunc func(mandateID, auctionID, bidderID string, amount float64, now time.Time) error
+
 type AuctionBidService struct {
-	auctions   domain.SubastaRepository
-	bids       domain.BidRepository
-	lock       domain.BidLockPort
-	notifier   domain.BidNotifierPort
-	guarantees domain.GuaranteeRepository
-	now        func() time.Time
+	auctions         domain.SubastaRepository
+	bids             domain.BidRepository
+	lock             domain.BidLockPort
+	notifier         domain.BidNotifierPort
+	guarantees       domain.GuaranteeRepository
+	web3Verifier     domain.Web3SignatureVerifierPort
+	fraudTelemetry   domain.FraudTelemetryPort
+	mandateValidator MandateValidatorFunc
+	now              func() time.Time
 }
 
 type PlaceBidCmd struct {
@@ -23,6 +30,11 @@ type PlaceBidCmd struct {
 	PostorID       string
 	Monto          float64
 	IdempotencyKey string
+	WalletAddress  string
+	Signature      string
+	Nonce          string
+	Deadline       int64
+	AgentMandateID string
 }
 
 type BidResponse struct {
@@ -33,6 +45,9 @@ type BidResponse struct {
 	TiempoExtendido bool                 `json:"tiempo_extendido"`
 	FechaCierre     time.Time            `json:"fecha_cierre"`
 	Estado          domain.EstadoSubasta `json:"estado"`
+	HashAuditoria   string               `json:"hash_auditoria,omitempty"`
+	EIP712Digest    string               `json:"eip712_digest,omitempty"`
+	AgentMandateID  string               `json:"mandato_agente_id,omitempty"`
 }
 
 func NewAuctionBidService(auctions domain.SubastaRepository, bids domain.BidRepository, locks ...domain.BidLockPort) *AuctionBidService {
@@ -51,7 +66,47 @@ func NewAuctionBidServiceWithNotifierAndGuarantee(auctions domain.SubastaReposit
 	return &AuctionBidService{auctions: auctions, bids: bids, lock: lock, notifier: notifier, guarantees: guarantees, now: time.Now}
 }
 
+func (s *AuctionBidService) WithWeb3Verifier(verifier domain.Web3SignatureVerifierPort) *AuctionBidService {
+	s.web3Verifier = verifier
+	return s
+}
+
+func (s *AuctionBidService) WithFraudTelemetry(telemetry domain.FraudTelemetryPort) *AuctionBidService {
+	s.fraudTelemetry = telemetry
+	return s
+}
+
+func (s *AuctionBidService) WithMandateValidator(validator MandateValidatorFunc) *AuctionBidService {
+	s.mandateValidator = validator
+	return s
+}
+
 func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidResponse, error) {
+	now := s.now()
+	if cmd.AgentMandateID != "" && s.mandateValidator != nil {
+		if err := s.mandateValidator(cmd.AgentMandateID, cmd.SubastaID, cmd.PostorID, cmd.Monto, now); err != nil {
+			return BidResponse{}, err
+		}
+	}
+	var eip712Digest string
+	if cmd.WalletAddress != "" || cmd.Signature != "" {
+		if s.web3Verifier != nil {
+			env := domain.EIP712BidEnvelope{
+				AuctionID:     cmd.SubastaID,
+				BidderID:      cmd.PostorID,
+				WalletAddress: cmd.WalletAddress,
+				Amount:        cmd.Monto,
+				Nonce:         cmd.Nonce,
+				Deadline:      cmd.Deadline,
+				Signature:     cmd.Signature,
+			}
+			if err := s.web3Verifier.VerifyBidSignature(ctx, env, now); err != nil {
+				return BidResponse{}, err
+			}
+			eip712Digest = s.web3Verifier.ComputeTypedDataDigest(env)
+		}
+	}
+
 	var unlock domain.UnlockFunc
 	var err error
 	if s.lock != nil {
@@ -82,11 +137,10 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 			return BidResponse{
 				PujaID: existing.ID, SubastaID: subasta.ID, PostorLiderID: subasta.PostorLiderID,
 				PrecioActual: subasta.PrecioActual, FechaCierre: subasta.FechaCierre,
-				Estado: subasta.Estado,
+				Estado: subasta.Estado, EIP712Digest: eip712Digest,
 			}, nil
 		}
 	}
-	now := s.now()
 	precioAnterior := subasta.PrecioActual
 	pujaID, err := newID("bid_")
 	if err != nil {
@@ -104,10 +158,26 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 			return BidResponse{}, err
 		}
 	}
+	if s.fraudTelemetry != nil {
+		s.fraudTelemetry.PublishBidTelemetry(domain.BidTelemetryEvent{
+			AuctionID:     subasta.ID,
+			BidID:         puja.ID,
+			BidderID:      puja.PostorID,
+			Amount:        puja.Monto,
+			PreviousPrice: precioAnterior,
+			Timestamp:     puja.Timestamp,
+			AgentMandate:  cmd.AgentMandateID,
+		})
+	}
+	rawAudit := fmt.Sprintf("%s|%s|%s|%.2f|%d", subasta.ID, puja.ID, puja.PostorID, puja.Monto, puja.Timestamp.UTC().UnixNano())
+	auditSum := sha256.Sum256([]byte(rawAudit))
 	return BidResponse{
 		PujaID: puja.ID, SubastaID: subasta.ID, PostorLiderID: subasta.PostorLiderID,
 		PrecioActual: subasta.PrecioActual, TiempoExtendido: extended,
 		FechaCierre: subasta.FechaCierre, Estado: subasta.Estado,
+		HashAuditoria:  "0x" + hex.EncodeToString(auditSum[:]),
+		EIP712Digest:   eip712Digest,
+		AgentMandateID: cmd.AgentMandateID,
 	}, nil
 }
 

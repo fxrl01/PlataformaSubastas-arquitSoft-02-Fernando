@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxrl01/livebid-backend/internal/adapters/web3"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
 )
@@ -111,5 +112,104 @@ func TestAuctionCatalogClosesExpiredAuctions(t *testing.T) {
 	if closed != 1 || expired.Estado != domain.SubastaCerrada || current.Estado != domain.SubastaActiva {
 		t.Fatalf("unexpected expired auction result: closed=%d expired=%s current=%s",
 			closed, expired.Estado, current.Estado)
+	}
+}
+
+type indexedExpiredRepo struct {
+	*MockRepo
+	indexedCalls int
+}
+
+func (r *indexedExpiredRepo) ListarVencidas(_ context.Context, now time.Time) ([]*domain.Subasta, error) {
+	r.indexedCalls++
+	var result []*domain.Subasta
+	for _, s := range r.subastas {
+		if s.Estado.EsAceptandoPujas() && !s.FechaCierre.After(now) {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+func TestAuctionCatalogUsesIndexedExpiredQueryWhenSupported(t *testing.T) {
+	now := time.Date(2026, 10, 31, 23, 0, 0, 0, time.UTC)
+	expired := domain.NuevaSubasta("expired", "Obra", "", 100, now.Add(-2*time.Hour), now.Add(-time.Minute))
+	expired.Estado = domain.SubastaActiva
+	repo := &indexedExpiredRepo{
+		MockRepo: &MockRepo{subastas: map[string]*domain.Subasta{expired.ID: expired}},
+	}
+	service := services.NuevoAuctionCatalogService(repo)
+
+	closed, err := service.CerrarVencidas(context.Background(), now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if closed != 1 || repo.indexedCalls != 1 {
+		t.Fatalf("expected ListarVencidas to be called once and close 1 auction, got closed=%d calls=%d", closed, repo.indexedCalls)
+	}
+}
+
+type mockAuditTrailRepo struct {
+	hashes  []string
+	chain   []domain.AuditLogEntry
+	receipt *domain.OnChainSettlementReceipt
+}
+
+func (m *mockAuditTrailRepo) ObtenerHashesAuditoria(context.Context, string) ([]string, error) {
+	return m.hashes, nil
+}
+
+func (m *mockAuditTrailRepo) ObtenerCadenaAuditoria(context.Context, string) ([]domain.AuditLogEntry, error) {
+	return m.chain, nil
+}
+
+func (m *mockAuditTrailRepo) GuardarReciboOnChain(_ context.Context, r domain.OnChainSettlementReceipt) error {
+	m.receipt = &r
+	return nil
+}
+
+func (m *mockAuditTrailRepo) ObtenerReciboOnChain(context.Context, string) (*domain.OnChainSettlementReceipt, error) {
+	return m.receipt, nil
+}
+
+func TestAuctionCloseAnchorsMerkleRootOnChainAndWeb3AuditInspectsProof(t *testing.T) {
+	start := time.Now()
+	auction := domain.NuevaSubasta("sub-web3", "Arte NFT", "", 1000, start, start.Add(time.Hour))
+	auction.Estado = domain.SubastaActiva
+	auction.PostorLiderID = "usr-winner"
+	auction.PrecioActual = 1500
+
+	repo := &MockRepo{subastas: map[string]*domain.Subasta{"sub-web3": auction}}
+	auditRepo := &mockAuditTrailRepo{
+		hashes: []string{
+			"1111111111111111111111111111111111111111111111111111111111111111",
+			"2222222222222222222222222222222222222222222222222222222222222222",
+		},
+		chain: []domain.AuditLogEntry{
+			{Event: "PUJA_REGISTRADA", PreviousHash: "GENESIS", CurrentHash: "h1"},
+			{Event: "PUJA_REGISTRADA", PreviousHash: "h1", CurrentHash: "h2"},
+		},
+	}
+	escrow := web3.NewEVMEscrowAdapter(8453, "0x1111111111111111111111111111111111111111", "")
+	catalog := services.NuevoAuctionCatalogService(repo).WithWeb3Settlement(auditRepo, escrow)
+
+	if err := catalog.Cerrar(context.Background(), "sub-web3"); err != nil {
+		t.Fatalf("close auction with web3 settlement failed: %v", err)
+	}
+	if auditRepo.receipt == nil || auditRepo.receipt.TxHash == "" {
+		t.Fatalf("expected on-chain receipt to be stored on auction close, got %+v", auditRepo.receipt)
+	}
+
+	auditService := services.NewWeb3AuditService(repo, auditRepo)
+	leafIdx := 1
+	report, err := auditService.InspectAuction(context.Background(), "sub-web3", &leafIdx)
+	if err != nil {
+		t.Fatalf("inspect auction failed: %v", err)
+	}
+	if !report.ChainIntact || report.MerkleProof == nil || !report.MerkleProof.Verified {
+		t.Fatalf("expected intact hash chain and verified Merkle proof, got %+v", report)
+	}
+	if report.OnChainReceipt == nil || report.OnChainReceipt.MerkleRoot != report.MerkleRoot {
+		t.Fatalf("expected onchain receipt Merkle root to match report root, got %+v", report)
 	}
 }

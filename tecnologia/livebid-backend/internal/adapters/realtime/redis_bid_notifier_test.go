@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -64,5 +65,63 @@ func TestAuctionClosedEventOmitsWinnerWhenDeserted(t *testing.T) {
 	}
 	if _, exists := decoded["winner_id"]; exists {
 		t.Fatalf("deserted auction must omit winner: %s", payload)
+	}
+}
+
+type fakePubSubStream struct {
+	ch     chan []byte
+	closed bool
+}
+
+func (f *fakePubSubStream) Messages() <-chan []byte { return f.ch }
+func (f *fakePubSubStream) Close() error {
+	f.closed = true
+	return nil
+}
+
+func TestAuctionRoomHubMultiplexesSingleSubscriptionAcrossMultipleClients(t *testing.T) {
+	subscribeCount := 0
+	var activeStream *fakePubSubStream
+
+	hub := NewAuctionRoomHub(func(_ context.Context, _ string) (PubSubStream, error) {
+		subscribeCount++
+		activeStream = &fakePubSubStream{ch: make(chan []byte, 8)}
+		return activeStream, nil
+	})
+
+	ch1, leave1, err := hub.Join("sub-1")
+	if err != nil {
+		t.Fatalf("join 1 failed: %v", err)
+	}
+	ch2, leave2, err := hub.Join("sub-1")
+	if err != nil {
+		t.Fatalf("join 2 failed: %v", err)
+	}
+
+	if subscribeCount != 1 || hub.ActiveRooms() != 1 {
+		t.Fatalf("expected 1 broker subscription for 2 clients in same room, got subs=%d rooms=%d", subscribeCount, hub.ActiveRooms())
+	}
+
+	activeStream.ch <- []byte(`{"type":"bid.accepted","amount":5000}`)
+
+	for i, ch := range []<-chan []byte{ch1, ch2} {
+		select {
+		case msg := <-ch:
+			if string(msg) != `{"type":"bid.accepted","amount":5000}` {
+				t.Fatalf("client %d got unexpected payload: %s", i+1, msg)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("client %d timed out waiting for fan-out message", i+1)
+		}
+	}
+
+	leave1()
+	if hub.ActiveRooms() != 1 || activeStream.closed {
+		t.Fatal("room should remain active while client 2 is still connected")
+	}
+
+	leave2()
+	if hub.ActiveRooms() != 0 || !activeStream.closed {
+		t.Fatal("room should close broker subscription when last client leaves")
 	}
 }

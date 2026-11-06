@@ -41,6 +41,12 @@ type SubastaRepository interface {
 	Listar(ctx context.Context) ([]*Subasta, error)
 }
 
+// ExpiredSubastaRepository define una capacidad optimizada para obtener únicamente
+// las subastas activas cuyo tiempo de cierre ya venció, evitando escaneos completos.
+type ExpiredSubastaRepository interface {
+	ListarVencidas(ctx context.Context, now time.Time) ([]*Subasta, error)
+}
+
 type BidRepository interface {
 	BuscarPorIdempotencyKey(ctx context.Context, subastaID, bidderID, key string) (*Puja, error)
 	RegistrarPujaAtomica(ctx context.Context, subastaID string, puja Puja, precioAnterior float64, fechaCierre time.Time, tiempoExtendido bool, idempotencyKey string) error
@@ -88,4 +94,46 @@ const (
 // AIRiskPort define el puerto para evaluación preventiva de riesgo y fraude con IA (Gemini).
 type AIRiskPort interface {
 	EvaluarRiesgo(ctx context.Context, postorID string, subastaID string, monto float64) (NivelRiesgo, error)
+}
+
+// EvaluacionRiesgo contiene el veredicto detallado del agente de IA o su Circuit Breaker.
+type EvaluacionRiesgo struct {
+	Score              int         `json:"score"`
+	Nivel              NivelRiesgo `json:"nivel_riesgo"`
+	PorcentajeGarantia float64     `json:"porcentaje_garantia"`
+	Justificacion      string      `json:"justificacion"`
+	ModoFallback       bool        `json:"modo_fallback"`
+}
+
+// AIRiskEvaluator extiende AIRiskPort con evaluación de perfil para garantías dinámicas.
+type AIRiskEvaluator interface {
+	AIRiskPort
+	EvaluarPostor(ctx context.Context, postorID string, subastaID string) (EvaluacionRiesgo, error)
+}
+
+// Web3SignatureVerifierPort verifica firmas tipadas EIP-712 emitidas por billeteras Web3.
+type Web3SignatureVerifierPort interface {
+	ComputeTypedDataDigest(envelope EIP712BidEnvelope) string
+	VerifyBidSignature(ctx context.Context, envelope EIP712BidEnvelope, now time.Time) error
+}
+
+// BlockchainEscrowPort define el puerto hacia el Smart Contract de custodia (Trustless Escrow) y anclaje Merkle.
+type BlockchainEscrowPort interface {
+	LockCollateralOnChain(ctx context.Context, auctionID, bidderID, walletAddress string, amount float64) (txHash string, err error)
+	SettleEscrowAndAnchorMerkleRoot(ctx context.Context, auctionID, winnerID string, winningAmount float64, merkleRoot string) (OnChainSettlementReceipt, error)
+}
+
+// AuditLogEntry representa un eslabón de la cadena de auditoría forense de una subasta.
+type AuditLogEntry struct {
+	Event        string `json:"evento"`
+	PreviousHash string `json:"hash_anterior"`
+	CurrentHash  string `json:"hash_actual"`
+}
+
+// AuditTrailRepository consulta la cadena criptográfica de pujas y persiste recibos de anclaje on-chain.
+type AuditTrailRepository interface {
+	ObtenerHashesAuditoria(ctx context.Context, subastaID string) ([]string, error)
+	ObtenerCadenaAuditoria(ctx context.Context, subastaID string) ([]AuditLogEntry, error)
+	GuardarReciboOnChain(ctx context.Context, receipt OnChainSettlementReceipt) error
+	ObtenerReciboOnChain(ctx context.Context, subastaID string) (*OnChainSettlementReceipt, error)
 }

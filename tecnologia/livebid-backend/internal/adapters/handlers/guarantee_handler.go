@@ -17,7 +17,8 @@ func NewGuaranteeHandler(service *services.GuaranteeService) *GuaranteeHandler {
 }
 
 type createGuaranteeRequest struct {
-	Amount float64 `json:"monto"`
+	Amount        float64 `json:"monto"`
+	WalletAddress string  `json:"wallet_address,omitempty"`
 }
 
 func (h *GuaranteeHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -30,13 +31,19 @@ func (h *GuaranteeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return
 	}
+	wallet := request.WalletAddress
+	if wallet == "" {
+		wallet = r.Header.Get("X-Web3-Wallet")
+	}
 	view, err := h.service.Create(r.Context(), services.CreateGuaranteeCmd{
-		AuctionID: r.PathValue("id"), BidderID: user.ID, Amount: request.Amount,
+		AuctionID: r.PathValue("id"), BidderID: user.ID, Amount: request.Amount, WalletAddress: wallet,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrSubastaNoEncontrada):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "auction not found"})
+		case errors.Is(err, domain.ErrInvalidWeb3Wallet):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid web3 wallet address"})
 		case errors.Is(err, domain.ErrGuaranteeInsufficient):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "guarantee insufficient"})
 		case errors.Is(err, domain.ErrGuaranteeAlreadyActive):

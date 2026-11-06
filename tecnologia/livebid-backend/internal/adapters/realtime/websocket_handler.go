@@ -17,13 +17,17 @@ type WebSocketHandler struct {
 	issuer   *security.JWTIssuer
 	users    domain.UserRepository
 	auctions domain.SubastaRepository
-	redis    *redis.Client
+	hub      *AuctionRoomHub
 	upgrader websocket.Upgrader
 }
 
 func NewWebSocketHandler(issuer *security.JWTIssuer, users domain.UserRepository, auctions domain.SubastaRepository, client *redis.Client) *WebSocketHandler {
+	var hub *AuctionRoomHub
+	if client != nil {
+		hub = NewAuctionRoomHub(NewRedisSubscriber(client))
+	}
 	return &WebSocketHandler{
-		issuer: issuer, users: users, auctions: auctions, redis: client,
+		issuer: issuer, users: users, auctions: auctions, hub: hub,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
@@ -38,13 +42,12 @@ func NewWebSocketHandler(issuer *security.JWTIssuer, users domain.UserRepository
 }
 
 func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	const prefix = "Bearer "
-	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, prefix) {
+	rawToken := extractBearerOrQueryToken(r)
+	if rawToken == "" {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	claims, err := h.issuer.Verify(strings.TrimSpace(strings.TrimPrefix(header, prefix)))
+	claims, err := h.issuer.Verify(rawToken)
 	if err != nil {
 		http.Error(w, "invalid authentication token", http.StatusUnauthorized)
 		return
@@ -54,7 +57,8 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid authentication token", http.StatusUnauthorized)
 		return
 	}
-	if _, err := h.auctions.ObtenerPorID(r.Context(), r.PathValue("id")); err != nil {
+	auctionID := r.PathValue("id")
+	if _, err := h.auctions.ObtenerPorID(r.Context(), auctionID); err != nil {
 		http.Error(w, "auction not found", http.StatusNotFound)
 		return
 	}
@@ -64,14 +68,17 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	channel := RedisChannelPrefix() + r.PathValue("id")
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	pubsub := h.redis.Subscribe(ctx, channel)
-	defer pubsub.Close()
-	if _, err := pubsub.Receive(ctx); err != nil {
+	if h.hub == nil {
 		return
 	}
+	messages, leave, err := h.hub.Join(auctionID)
+	if err != nil {
+		return
+	}
+	defer leave()
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
 	go func() {
 		for {
@@ -83,13 +90,26 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	for {
-		message, err := pubsub.ReceiveMessage(ctx)
-		if err != nil {
+		select {
+		case <-ctx.Done():
 			return
-		}
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, []byte(message.Payload)); err != nil {
-			return
+		case payload, ok := <-messages:
+			if !ok {
+				return
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+				return
+			}
 		}
 	}
+}
+
+func extractBearerOrQueryToken(r *http.Request) string {
+	const prefix = "Bearer "
+	header := r.Header.Get("Authorization")
+	if strings.HasPrefix(header, prefix) {
+		return strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	}
+	return strings.TrimSpace(r.URL.Query().Get("token"))
 }

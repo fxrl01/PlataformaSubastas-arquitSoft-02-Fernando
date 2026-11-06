@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
@@ -13,11 +14,16 @@ import (
 )
 
 type AuctionHandler struct {
-	catalog *services.AuctionCatalogService
+	catalog   *services.AuctionCatalogService
+	web3Audit *services.Web3AuditService
 }
 
-func NewAuctionHandler(catalog *services.AuctionCatalogService) *AuctionHandler {
-	return &AuctionHandler{catalog: catalog}
+func NewAuctionHandler(catalog *services.AuctionCatalogService, audit ...*services.Web3AuditService) *AuctionHandler {
+	var auditService *services.Web3AuditService
+	if len(audit) > 0 {
+		auditService = audit[0]
+	}
+	return &AuctionHandler{catalog: catalog, web3Audit: auditService}
 }
 
 type createAuctionRequest struct {
@@ -104,6 +110,32 @@ func (h *AuctionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuctionHandler) Close(w http.ResponseWriter, r *http.Request) {
 	h.transition(w, r, h.catalog.Cerrar)
+}
+
+func (h *AuctionHandler) AuditWeb3(w http.ResponseWriter, r *http.Request) {
+	if h.web3Audit == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "web3 audit not configured"})
+		return
+	}
+	var proofIdx *int
+	if rawIdx := r.URL.Query().Get("indice"); rawIdx != "" {
+		parsed, err := strconv.Atoi(rawIdx)
+		if err != nil || parsed < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid merkle leaf index"})
+			return
+		}
+		proofIdx = &parsed
+	}
+	report, err := h.web3Audit.InspectAuction(r.Context(), r.PathValue("id"), proofIdx)
+	if errors.Is(err, domain.ErrSubastaNoEncontrada) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "auction not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (h *AuctionHandler) transition(w http.ResponseWriter, r *http.Request, action func(context.Context, string) error) {

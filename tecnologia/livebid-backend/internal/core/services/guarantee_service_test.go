@@ -69,3 +69,46 @@ func TestGuaranteeRejectsDuplicateActiveGuarantee(t *testing.T) {
 		t.Fatalf("expected duplicate guarantee error, got %v", err)
 	}
 }
+
+type mockAIRiskEvaluator struct {
+	eval domain.EvaluacionRiesgo
+}
+
+func (m mockAIRiskEvaluator) EvaluarRiesgo(context.Context, string, string, float64) (domain.NivelRiesgo, error) {
+	return m.eval.Nivel, nil
+}
+
+func (m mockAIRiskEvaluator) EvaluarPostor(context.Context, string, string) (domain.EvaluacionRiesgo, error) {
+	return m.eval, nil
+}
+
+func TestGuaranteeRequiresTwentyPercentForHighRiskBidder(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-1", "Laptop", "", 2500, now, now.Add(time.Hour))
+	guarantees := &mockGuaranteeRepository{}
+	risk := mockAIRiskEvaluator{eval: domain.EvaluacionRiesgo{
+		Score:              38,
+		Nivel:              domain.RiesgoAlto,
+		PorcentajeGarantia: 0.20,
+	}}
+	service := services.NewGuaranteeService(
+		&MockRepo{subastas: map[string]*domain.Subasta{"sub-1": auction}}, guarantees, risk,
+	)
+
+	// 10% (250) must be rejected for high risk bidder (requires 20% = 500)
+	if _, err := service.Create(context.Background(), services.CreateGuaranteeCmd{
+		AuctionID: "sub-1", BidderID: "USR-RIESGO_ALTO", Amount: 250,
+	}); err != domain.ErrGuaranteeInsufficient {
+		t.Fatalf("expected ErrGuaranteeInsufficient for 10%% on high-risk bidder, got %v", err)
+	}
+
+	view, err := service.Create(context.Background(), services.CreateGuaranteeCmd{
+		AuctionID: "sub-1", BidderID: "USR-RIESGO_ALTO", Amount: 500,
+	})
+	if err != nil {
+		t.Fatalf("expected 20%% guarantee to succeed, got %v", err)
+	}
+	if view.TrustScore != 38 || view.RiskLevel != domain.RiesgoAlto {
+		t.Fatalf("expected AI trust score 38 and HIGH risk, got %+v", view)
+	}
+}

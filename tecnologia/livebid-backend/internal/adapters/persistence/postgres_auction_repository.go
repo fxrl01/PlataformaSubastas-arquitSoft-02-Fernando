@@ -59,6 +59,32 @@ func (r *PostgresAuctionRepository) Listar(ctx context.Context) ([]*domain.Subas
 	return result, nil
 }
 
+func (r *PostgresAuctionRepository) ListarVencidas(ctx context.Context, now time.Time) ([]*domain.Subasta, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, titulo, descripcion, precio_base, incremento_minimo, precio_actual,
+			postor_lider_id, estado, fin_programado, created_at, inicio_programado, vendedor_id
+		FROM subastas
+		WHERE estado IN ('ACTIVA', 'EN_CONTEO') AND fin_programado <= $1
+		ORDER BY fin_programado ASC`, now)
+	if err != nil {
+		return nil, fmt.Errorf("list expired auctions: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*domain.Subasta
+	for rows.Next() {
+		subasta, err := scanAuction(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan expired auction: %w", err)
+		}
+		result = append(result, subasta)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expired auctions: %w", err)
+	}
+	return result, nil
+}
+
 func (r *PostgresAuctionRepository) Guardar(ctx context.Context, subasta *domain.Subasta) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO subastas

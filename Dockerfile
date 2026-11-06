@@ -1,7 +1,7 @@
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-COPY tecnologia/livebid-backend/go.mod ./
+COPY tecnologia/livebid-backend/go.mod tecnologia/livebid-backend/go.sum ./
 RUN go mod download
 COPY tecnologia/livebid-backend ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/livebid-server ./cmd/server
@@ -10,6 +10,7 @@ FROM alpine:3.20
 WORKDIR /app
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/livebid-server /app/livebid-server
+COPY tecnologia/boilerplate-clean-arquitecture/public /app/public
 RUN adduser -D -u 1000 livebiduser
 USER livebiduser
 

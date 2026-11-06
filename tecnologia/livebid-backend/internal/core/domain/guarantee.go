@@ -33,3 +33,10 @@ type Guarantee struct {
 func RequiredGuarantee(basePrice float64) float64 {
 	return basePrice * 0.10
 }
+
+func RequiredGuaranteeWithRatio(basePrice, ratio float64) float64 {
+	if ratio <= 0 {
+		return RequiredGuarantee(basePrice)
+	}
+	return basePrice * ratio
+}

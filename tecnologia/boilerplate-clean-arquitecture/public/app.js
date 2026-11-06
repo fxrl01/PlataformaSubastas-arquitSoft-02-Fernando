@@ -73,12 +73,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await fetch(`/api/v1/subastas/${state.subastaId}`);
       if (res.ok) {
         const data = await res.json();
-        state.precioActual = data.precioActual;
-        state.incrementoMinimo = data.incrementoMinimo;
-        state.postorLiderId = data.postorLiderId;
-        state.totalPujas = data.totalPujas || 0;
-        if (data.postorLiderId && data.postorLiderId !== 'NINGUNO') {
-          state.postorLiderNombre = `${data.postorLiderId} (Líder en Estrado)`;
+        state.precioActual = data.precio_actual ?? data.precioActual ?? state.precioActual;
+        state.incrementoMinimo = data.incremento_minimo ?? data.incrementoMinimo ?? state.incrementoMinimo;
+        const lider = data.postor_lider_id ?? data.postorLiderId ?? 'NINGUNO';
+        state.postorLiderId = lider;
+        state.totalPujas = data.total_pujas ?? data.totalPujas ?? 0;
+        if (lider && lider !== 'NINGUNO') {
+          state.postorLiderNombre = `${lider} (Líder en Estrado)`;
         }
         actualizarPreciosUI();
       }
@@ -199,19 +200,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     elBtnEmitirPuja.innerHTML = '<span class="btn-text">AUDITANDO EN REDIS...</span>';
 
     try {
-      // Intentar llamada HTTP al servidor backend si está disponible
-      const res = await fetch(`/api/v1/subastas/${state.subastaId}/puja`, {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `idem-${state.subastaId}-${state.usuarioActual.id}-${monto}-${Date.now()}`
+      };
+      if (state.authToken) {
+        headers['Authorization'] = `Bearer ${state.authToken}`;
+      }
+      // Intentar endpoint unificado en plural (/pujas - Go Backend) con fallback a (/puja - TS Boilerplate)
+      let res = await fetch(`/api/v1/subastas/${state.subastaId}/pujas`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          postorId: state.usuarioActual.id,
-          monto: monto
-        })
+        headers,
+        body: JSON.stringify({ monto })
       });
+      if (res.status === 404 || res.status === 401) {
+        res = await fetch(`/api/v1/subastas/${state.subastaId}/puja`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            postorId: state.usuarioActual.id,
+            monto: monto
+          })
+        });
+      }
 
       if (res.ok) {
         const data = await res.json();
-        procesarPujaExitosa(monto, state.usuarioActual.nombre, data.hashSha256 || generarHashMock());
+        procesarPujaExitosa(monto, state.usuarioActual.nombre, data.hash_auditoria || data.hashSha256 || generarHashMock());
       } else {
         const errorData = await res.json().catch(() => ({}));
         if (errorData.error) {
