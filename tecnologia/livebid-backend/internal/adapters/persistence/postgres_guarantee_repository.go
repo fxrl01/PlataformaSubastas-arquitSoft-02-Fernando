@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/jackc/pgx/v5"
@@ -11,11 +12,17 @@ import (
 )
 
 type PostgresGuaranteeRepository struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	gateway domain.PaymentGatewayPort
 }
 
 func NewPostgresGuaranteeRepository(pool *pgxpool.Pool) *PostgresGuaranteeRepository {
 	return &PostgresGuaranteeRepository{pool: pool}
+}
+
+func (r *PostgresGuaranteeRepository) WithPaymentGateway(gateway domain.PaymentGatewayPort) *PostgresGuaranteeRepository {
+	r.gateway = gateway
+	return r
 }
 
 func (r *PostgresGuaranteeRepository) FindActive(ctx context.Context, auctionID, bidderID string) (*domain.Guarantee, error) {
@@ -59,6 +66,27 @@ func (r *PostgresGuaranteeRepository) SettleAuction(ctx context.Context, auction
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	type heldAuth struct {
+		bidderID string
+		authID   string
+	}
+	var heldList []heldAuth
+	if r.gateway != nil {
+		rows, qErr := tx.Query(ctx, `
+			SELECT postor_id, autorizacion_bancaria_id
+			FROM garantias
+			WHERE subasta_id = $1 AND estado = 'RETENIDA'`, auctionID)
+		if qErr == nil {
+			for rows.Next() {
+				var item heldAuth
+				if err := rows.Scan(&item.bidderID, &item.authID); err == nil {
+					heldList = append(heldList, item)
+				}
+			}
+			rows.Close()
+		}
+	}
+
 	if winnerID != "" {
 		if _, err := tx.Exec(ctx, `
 			UPDATE garantias
@@ -78,6 +106,19 @@ func (r *PostgresGuaranteeRepository) SettleAuction(ctx context.Context, auction
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit settled guarantees: %w", err)
+	}
+
+	if r.gateway != nil {
+		for _, item := range heldList {
+			if !strings.HasPrefix(item.authID, "pi_") {
+				continue
+			}
+			if winnerID != "" && item.bidderID == winnerID {
+				_ = r.gateway.CaptureHoldIntent(ctx, item.authID)
+			} else {
+				_ = r.gateway.CancelHoldIntent(ctx, item.authID)
+			}
+		}
 	}
 	return nil
 }

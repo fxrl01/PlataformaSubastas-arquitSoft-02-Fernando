@@ -1,42 +1,82 @@
-# Requisitos funcionales — LiveBid
+# Especificación de Requisitos Funcionales (SRS) — LiveBid
 
 > **Proyecto:** LiveBid — Plataforma de Subastas en Tiempo Real  
-> **Capa:** Análisis de Sistema · **Versión:** 3.0 (RBAC Completo, Encargado/Peritaje, Web3 & IA Exponencial)
+> **Capa:** Análisis de Sistema · **Versión:** 3.1 (Especificación Completa por Módulo: Registro/Login/Admin, Imagen y Detalles del Lote, Pasarela Stripe Frontend+Backend, Sala en Vivo, IA y Auditoría)
 
 ---
 
-## 1. Catálogo de Requisitos Funcionales
+## 1. Catálogo Maestro de Requisitos Funcionales por Módulo
 
-| ID | Módulo | Requisito Funcional |
-|---|---|---|
-| **RF01** | Catálogo y Lotes | El sistema debe permitir listar y consultar subastas incluyendo su estado, precio base, precio líder, **datos del encargado/martillero** y **ficha técnica/pericial del lote**. |
-| **RF02** | Sala en Vivo (WS) | El sistema debe difundir actualizaciones de precio y estado en tiempo real a todos los clientes conectados a una subasta mediante un `AuctionRoomHub` multiplexado sobre Redis Pub/Sub ($O(1)$ suscripción por sala). |
-| **RF03** | Motor de Pujas | El sistema debe permitir a un `POSTOR` activo enviar pujas en vivo con protección de idempotencia (`Idempotency-Key`) y bloqueo distribuido atómico (`SETNX` + `SELECT ... FOR UPDATE`). |
-| **RF04** | Reglas de Dominio | El sistema debe validar que la subasta esté en `ACTIVA` o `EN_CONTEO`, que el postor no sea el líder actual (`ErrPostorIgual`), que el monto supere el incremento mínimo por tramo y extender automáticamente $+30\text{ s}$ si entra en los últimos $15\text{ s}$ (*Anti-Sniping*). |
-| **RF05** | Custodia / Escrow | El sistema debe verificar que el postor cuente con una garantía activa (`RETENIDA`) en custodia fiduciaria o en **Smart Contract Escrow Web3** antes de aceptar cualquier puja. |
-| **RF06** | Auditoría SHA-256 | El sistema debe encadenar criptográficamente cada puja y evento en PostgreSQL (`hash_auditoria` SHA-256 enlazado con `hash_anterior`) dentro de la misma transacción ACID. |
-| **RF07** | Gestión de Subasta | El sistema debe permitir crear subastas (`VENDEDOR`, `MARTILLERO`, `ADMIN`), activarlas (`ACTIVA`), iniciar el conteo de martillo (`EN_CONTEO`) y cerrarlas manual o automáticamente al vencer `fin_programado`. |
-| **RF08** | Encargado y Lote | El sistema debe permitir subir y actualizar los **detalles del encargado de la subasta** (`martillero_id`, nombre, cargo, licencia/colegiatura, contacto) y los **detalles del lote** (categoría, ubicación, precio de reserva, imágenes, certificado pericial y especificaciones). |
-| **RF09** | Identidad y Registro | El sistema debe permitir el registro de usuarios con solicitud de rol y datos de perfil, además de garantizar el *bootstrap* automático de un usuario `ADMIN` inicial. |
-| **RF10** | Administración RBAC | El sistema debe permitir al `ADMIN` listar usuarios filtrados por estado/rol, activar cuentas (`kyc_aprobado`), asignar roles (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`) y suspender o bloquear usuarios con invalidación inmediata en caché. |
-| **RF11** | Riesgo IA + Resiliencia | El sistema debe evaluar el score de confianza de cada puja mediante **Google Gemini AI** a través de un `CircuitBreaker` de $150\text{ ms}$ con fallback heurístico determinista y un **Multi-Model AI Router** reconfigurable en caliente. |
-| **RF12** | Telemetría Antifraude | El sistema debe analizar de forma asíncrona (fuera del camino crítico) el flujo de pujas para detectar patrones de *Bot Sniping*, *Wash Trading* y *Shill Bidding*, exponiendo alertas en tiempo real. |
-| **RF13** | Agentes IA Autónomos | El sistema debe permitir a un postor delegar un **Agente Autónomo de Puja IA** con techo presupuestario inquebrantable (`max_cap`) y estrategia configurable (`CONSERVADORA`, `EQUILIBRADA`, `SNIPER_ANTI_EXTENSION`). |
-| **RF14** | Auditoría Web3 Merkle | El sistema debe verificar firmas tipadas **EIP-712**, calcular la **Raíz de Merkle (`MerkleRoot`)** de todas las pujas de una subasta, generar pruebas de inclusión (`MerkleProof`) y emitir recibos de liquidación on-chain al cierre. |
+| ID | Módulo del Sistema | Requisito Funcional | Prioridad |
+| :--- | :--- | :--- | :---: |
+| **RF-01** | **M1. Identidad, Registro y Login** | El sistema debe permitir el registro de usuarios capturando nombre, correo único, contraseña ($\ge 8$ caracteres), documento de identidad, teléfono y **rol solicitado** (`POSTOR`, `VENDEDOR`, `MARTILLERO`), almacenando la contraseña con hash `bcrypt`. | Alta |
+| **RF-02** | **M1. Identidad, Registro y Login** | El sistema debe autenticar únicamente a usuarios en estado `ACTIVO` mediante `POST /api/v1/auth/login`, emitiendo un `access_token` JWT firmado (con `user_id` y `role`) y un `refresh_token` rotativo de un solo uso. | Alta |
+| **RF-03** | **M1. Gobernanza y Roles (`ADMIN`)** | El sistema debe inicializar automáticamente una cuenta `ADMIN` activa (`BootstrapAdmin`) y permitir al rol `ADMIN` listar usuarios, aprobar su verificación `KYC` (`kyc_aprobado = true`), cambiar su estado (`PENDIENTE`, `ACTIVO`, `SUSPENDIDO`, `BLOQUEADO`) y asignar su rol oficial (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`) con invalidación inmediata en caché. | Alta |
+| **RF-04** | **M2. Catálogo e Imagen Referencial** | El sistema debe permitir a los roles `VENDEDOR`, `MARTILLERO` y `ADMIN` crear subastas y **subir por sí mismos la imagen referencial y galería del bien** (mediante selector de archivo desde su dispositivo o URL), junto con la ficha técnica y pericial (`DetallesLote`: categoría, ubicación, precio de reserva, perito inspector, certificado PDF y especificaciones). | Alta |
+| **RF-05** | **M2. Encargado de la Subasta** | El sistema debe permitir asignar y actualizar los datos oficiales del **Encargado / Martillero de la Subasta** (`EncargadoSubasta`: `martillero_id`, nombre completo, cargo, número de licencia/colegiatura oficial, contacto y experiencia) y mostrarlos públicamente en la sala. | Alta |
+| **RF-06** | **M3. Pasarela Stripe (Intención + Hold)** | El sistema debe implementar la retención de garantía dividiendo responsabilidades entre **Backend y Frontend**: el Backend calcula el monto obligatorio (10% del precio base o 20% si el riesgo IA es alto) y crea en **Stripe** un `PaymentIntent` con `capture_method: "manual"` devolviendo el `client_secret`; el Frontend captura y tokeniza la tarjeta directamente contra Stripe y confirma la retención (`estado = RETENIDA` en PostgreSQL). | Alta |
+| **RF-07** | **M3. Pasarela Stripe (Liquidación y Webhook)** | Al cerrarse la subasta, el Backend debe ordenar automáticamente a **Stripe** capturar los fondos (`Capture`) del postor ganador (`CAPTURADA_COBRO`) y cancelar/liberar sin costo (`Cancel`) las retenciones de todos los demás postores (`LIBERADA`), además de procesar eventos asíncronos firmados en `POST /api/v1/webhooks/stripe`. | Alta |
+| **RF-08** | **M4. Motor de Pujas en Vivo** | El sistema debe validar que toda puja provenga de un usuario `ACTIVO` con garantía `RETENIDA`, que la subasta esté `ACTIVA` o `EN_CONTEO`, que supere el incremento mínimo por tramo, que no sea auto-puja consecutiva (`ErrPostorIgual`) y que esté protegida por `Idempotency-Key` y semáforo en memoria de `1.5s`. | Alta |
+| **RF-09** | **M4. Anti-Sniping y Martillero** | Si una puja válida ingresa en los últimos `15 segundos` antes del cierre, el sistema debe extender el cierre `+30 segundos` automáticamente. Además, debe permitir al `MARTILLERO` o `ADMIN` activar la sala (`ACTIVA`), iniciar el conteo de martillo (`EN_CONTEO`) y cerrar la subasta (`CERRADA`). | Alta |
+| **RF-10** | **M5. Copiloto IA y Auto-Puja** | El sistema debe evaluar el perfil de riesgo del postor mediante **Google Gemini** (con *Circuit Breaker* de `150 ms` y *fallback* local automático) y permitir a los postores delegar **Auto-Pujas** con un techo máximo de presupuesto (`max_cap`). | Media |
+| **RF-11** | **M6. Auditoría Legal (`SHA-256` & `Merkle`)** | Cada puja y transición crítica debe registrarse en la tabla `logs_auditoria` de PostgreSQL encadenando su hash `SHA-256` con el evento anterior y generando al cierre un certificado de integridad (`MerkleRoot` y `MerkleProof`). | Media |
 
 ---
 
-## 2. Matriz de Trazabilidad: Historias de Usuario $\leftrightarrow$ Requisitos Funcionales
+## 2. Especificación Detallada de los Módulos Críticos
 
-| Historia de Usuario | Requisitos Funcionales Asociados | Endpoints / Componentes Principales |
-|---|---|---|
-| **HU01** Explorar subastas y peritaje | RF01, RF08 | `GET /api/v1/subastas`, `GET /api/v1/subastas/{id}` |
-| **HU02, HU04** Sala en vivo y broadcast WS | RF02, RF04 | `GET /ws?subasta_id=...`, `AuctionRoomHub` |
-| **HU03** Enviar puja atómica e idempotente | RF03, RF04, RF05, RF06 | `POST /api/v1/subastas/{id}/pujas`, `AuctionService.ProcesarPuja` |
-| **HU05** Delegar Agente Autónomo IA | RF13 | `POST /api/v1/subastas/{id}/agentes-ia/delegar`, `POST .../auto-puja` |
-| **HU06, HU17** Verificar Merkle Proof y Hash Chain | RF06, RF14 | `GET /api/v1/subastas/{id}/auditoria-web3`, `Web3AuditService` |
-| **HU07** Registro de usuario y solicitud KYC | RF09 | `POST /api/v1/auth/register`, `GET /api/v1/auth/me` |
-| **HU08, HU11, HU12** Subir encargado y ficha del lote | RF07, RF08 | `POST /api/v1/subastas`, `PUT /api/v1/subastas/{id}/encargado`, `PUT .../detalles-lote` |
-| **HU09, HU10, HU13** Activar, conteo y cierre con liquidación | RF05, RF07, RF14 | `POST /api/v1/subastas/{id}/activar`, `/conteo`, `/cerrar` |
-| **HU14, HU15** Gestión Admin de usuarios y roles | RF09, RF10 | `GET /api/v1/admin/users`, `PATCH .../role`, `PATCH .../status`, `PATCH .../activate` |
-| **HU16** Inteligencia antifraude y Hot-Swap IA | RF11, RF12 | `GET /api/v1/subastas/{id}/inteligencia-ia`, `PATCH /api/v1/admin/ia/modelo` |
+### 2.1 Módulo 1: Flujo de Registro, Login y Administración de Roles (`RBAC`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDIENTE: Usuario se registra (POST /auth/register)\nElige rol_solicitado (POSTOR, VENDEDOR o MARTILLERO)
+    PENDIENTE --> ACTIVO: ADMIN aprueba KYC y asigna Rol Oficial\n(PATCH /admin/users/{id}/role & /status)
+    ACTIVO --> SUSPENDIDO: ADMIN suspende temporalmente
+    SUSPENDIDO --> ACTIVO: ADMIN reactiva cuenta
+    ACTIVO --> BLOQUEADO: ADMIN bloquea por fraude / incumplimiento
+```
+
+- **Regla de Seguridad en Registro:** Ningún usuario puede auto-activarse ni auto-asignarse el rol `ADMIN`, `VENDEDOR` o `MARTILLERO` sin aprobación del `ADMIN` (salvo la activación rápida de prueba en entorno de desarrollo).
+- **Bootstrap del Administrador:** Al iniciar el contenedor Go, `BootstrapAdmin` verifica en PostgreSQL que exista el administrador raíz (`admin@livebid.pe`) con rol `ADMIN`, estado `ACTIVO` y `kyc_aprobado = true`.
+
+---
+
+### 2.2 Módulo 2: Subida de Imagen Referencial y Detalles del Bien por el Vendedor / Encargado
+
+- **¿Quién realiza la subida?** El usuario con rol **`VENDEDOR`**, **`MARTILLERO`** o **`ADMIN`**.
+- **¿Cómo se sube la imagen referencial del lote?**
+  1. En el formulario de creación/edición de subasta, el usuario cuenta con un campo **"Subir Imagen Referencial desde mi equipo"** (`<input type="file" accept="image/*">`) y un campo opcional para agregar URLs de imágenes adicionales.
+  2. Cuando el usuario selecciona la foto desde su computadora o teléfono, el Frontend genera la vista previa inmediata y la codifica de forma segura (o sube a Cloud Storage) dentro del arreglo `imagenes_urls` de `DetallesLote`.
+  3. El Backend persiste `detalles_lote_json` y `encargado_json` en la tabla `subastas` de PostgreSQL 16 y devuelve toda la información lista para mostrarse en las tarjetas del catálogo y en la cabecera de la sala en vivo.
+
+---
+
+### 2.3 Módulo 3: Arquitectura del Pago Combinado (`Frontend + Backend`) con Stripe
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as 👤 Postor (Navegador)
+    participant FE as 🌐 Frontend SPA (Clave Pública pk_...)
+    participant BE as ⚙️ Backend Go (Clave Secreta sk_...)
+    participant ST as 💳 Stripe API (PCI-DSS)
+    participant DB as 🗄️ PostgreSQL 16 (Única BD)
+
+    P->>FE: Clic en "Autorizar Garantía con Tarjeta"
+    FE->>BE: POST /api/v1/subastas/{id}/garantias/intent
+    Note over BE,DB: Backend lee precio_base en PostgreSQL<br/>y calcula garantía (10% o 20% según riesgo IA)
+    BE->>ST: Crea PaymentIntent (amount, currency="usd", capture_method="manual")
+    ST-->>BE: Devuelve { id: "pi_...", client_secret: "pi_..._secret_..." }
+    BE-->>FE: Entrega client_secret y monto calculado (sin exponer sk_...)
+    FE->>ST: Postor ingresa tarjeta en UI segura -> Confirmación directa a Stripe
+    ST-->>FE: Estado: requires_capture (Fondos retenidos en tarjeta)
+    FE->>BE: POST /api/v1/subastas/{id}/garantias (envía payment_intent_id)
+    BE->>ST: Verifica que PaymentIntent esté en requires_capture
+    BE->>DB: INSERT INTO garantias (estado = 'RETENIDA', autorizacion_bancaria_id = 'pi_...')
+    BE-->>FE: 201 Created — Postor habilitado para pujar en vivo
+
+    Note over BE,ST: Al finalizar la subasta (POST /subastas/{id}/cerrar):
+    BE->>ST: Ganador -> POST /v1/payment_intents/{pi_ganador}/capture
+    BE->>ST: No ganadores -> POST /v1/payment_intents/{pi_perdedor}/cancel
+    BE->>DB: Actualiza garantias: ganador = CAPTURADA_COBRO, resto = LIBERADA
+```

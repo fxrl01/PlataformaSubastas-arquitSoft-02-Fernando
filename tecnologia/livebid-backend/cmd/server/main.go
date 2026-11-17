@@ -14,6 +14,7 @@ import (
 
 	"github.com/fxrl01/livebid-backend/internal/adapters/ai"
 	"github.com/fxrl01/livebid-backend/internal/adapters/handlers"
+	"github.com/fxrl01/livebid-backend/internal/adapters/payments"
 	"github.com/fxrl01/livebid-backend/internal/adapters/persistence"
 	"github.com/fxrl01/livebid-backend/internal/adapters/realtime"
 	"github.com/fxrl01/livebid-backend/internal/adapters/security"
@@ -85,6 +86,12 @@ func main() {
 	escrowContract := os.Getenv("WEB3_ESCROW_CONTRACT")
 	eip712Verifier := web3.NewEIP712Verifier(chainID, escrowContract)
 	blockchainEscrow := web3.NewEVMEscrowAdapter(chainID, escrowContract, os.Getenv("WEB3_RPC_URL"))
+	stripeGateway := payments.NewStripeAdapter(
+		os.Getenv("STRIPE_SECRET_KEY"),
+		os.Getenv("STRIPE_PUBLISHABLE_KEY"),
+		os.Getenv("STRIPE_WEBHOOK_SECRET"),
+	)
+	guaranteeRepository.WithPaymentGateway(stripeGateway)
 
 	// 5. Servicios de Aplicación y Bootstrap Automático de Administrador
 	authService := services.NewAuthService(
@@ -114,7 +121,8 @@ func main() {
 		guaranteeRepository,
 	).WithWeb3Verifier(eip712Verifier).WithFraudTelemetry(fraudDetector)
 	guaranteeService := services.NewGuaranteeService(auctionRepository, guaranteeRepository, aiRouter).
-		WithBlockchainEscrow(blockchainEscrow)
+		WithBlockchainEscrow(blockchainEscrow).
+		WithPaymentGateway(stripeGateway)
 	bidHistoryService := services.NewBidHistoryService(auctionRepository, bidRepository)
 	web3AuditService := services.NewWeb3AuditService(auctionRepository, bidRepository)
 	agentDelegationService := services.NewAgentDelegationService(auctionRepository, bidService)
@@ -204,19 +212,26 @@ func main() {
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Close))))
 
-	// Pujas, Garantías y Agentes Autónomos de IA
+	// Pujas, Garantías (Stripe PaymentIntents Hold) y Agentes Autónomos de IA
 	mux.Handle("POST /api/v1/subastas/{id}/pujas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
-			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(bidHandler.Place))))
+			handlers.RequireRoles(domain.RoleBidder, domain.RoleAdmin)(http.HandlerFunc(bidHandler.Place))))
+	mux.Handle("GET /api/v1/subastas/{id}/garantias/me",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			http.HandlerFunc(guaranteeHandler.GetMyGuarantee)))
+	mux.Handle("POST /api/v1/subastas/{id}/garantias/stripe-intent",
+		handlers.RequireAuth(jwtIssuer, userRepository,
+			handlers.RequireRoles(domain.RoleBidder, domain.RoleAdmin)(http.HandlerFunc(guaranteeHandler.PrepareStripeIntent))))
 	mux.Handle("POST /api/v1/subastas/{id}/garantias",
 		handlers.RequireAuth(jwtIssuer, userRepository,
-			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(guaranteeHandler.Create))))
+			handlers.RequireRoles(domain.RoleBidder, domain.RoleAdmin)(http.HandlerFunc(guaranteeHandler.Create))))
+	mux.HandleFunc("POST /api/v1/webhooks/stripe", guaranteeHandler.StripeWebhook)
 	mux.Handle("POST /api/v1/subastas/{id}/agentes-ia/delegar",
 		handlers.RequireAuth(jwtIssuer, userRepository,
-			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(agentAIHandler.Delegate))))
+			handlers.RequireRoles(domain.RoleBidder, domain.RoleAdmin)(http.HandlerFunc(agentAIHandler.Delegate))))
 	mux.Handle("POST /api/v1/subastas/{id}/agentes-ia/auto-puja",
 		handlers.RequireAuth(jwtIssuer, userRepository,
-			handlers.RequireRoles(domain.RoleBidder)(http.HandlerFunc(agentAIHandler.AutoBid))))
+			handlers.RequireRoles(domain.RoleBidder, domain.RoleAdmin)(http.HandlerFunc(agentAIHandler.AutoBid))))
 	mux.Handle("GET /ws/subastas/{id}", webSocketHandler)
 
 	port := os.Getenv("PORT")

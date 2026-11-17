@@ -77,6 +77,17 @@ type GuaranteeRepository interface {
 	SettleAuction(ctx context.Context, auctionID, winnerID string) error
 }
 
+// PaymentGatewayPort define el contrato hexagonal hacia la pasarela de pagos fiduciaria (Stripe).
+// Divide estrictamente las responsabilidades Backend (creación de PaymentIntent Hold, verificación,
+// captura al ganador y liberación al resto) de la captura de tarjeta en el Frontend.
+type PaymentGatewayPort interface {
+	CreateManualHoldIntent(ctx context.Context, auctionID, bidderID string, amount float64, currency string) (StripePaymentIntent, error)
+	VerifyHoldIntent(ctx context.Context, paymentIntentID string) (string, error)
+	CaptureHoldIntent(ctx context.Context, paymentIntentID string) error
+	CancelHoldIntent(ctx context.Context, paymentIntentID string) error
+	VerifyWebhookSignature(payload []byte, signatureHeader string) error
+}
+
 // PaymentEscrowPort define el puerto para validar y retener garantías de postores.
 type PaymentEscrowPort interface {
 	ValidarGarantiaActiva(ctx context.Context, postorID string, subastaID string) (bool, error)

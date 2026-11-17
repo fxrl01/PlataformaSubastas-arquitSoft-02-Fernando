@@ -2,9 +2,11 @@ package services_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/fxrl01/livebid-backend/internal/adapters/payments"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
 )
@@ -110,5 +112,42 @@ func TestGuaranteeRequiresTwentyPercentForHighRiskBidder(t *testing.T) {
 	}
 	if view.TrustScore != 38 || view.RiskLevel != domain.RiesgoAlto {
 		t.Fatalf("expected AI trust score 38 and HIGH risk, got %+v", view)
+	}
+}
+
+func TestStripeIntentAndGuaranteeConfirmationFlow(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-stripe-1", "MacBook Pro M3", "", 3000, now, now.Add(time.Hour))
+	guarantees := &mockGuaranteeRepository{}
+	stripeAdapter := payments.NewStripeAdapter("", "pk_test_livebid_demo", "whsec_demo")
+	service := services.NewGuaranteeService(
+		&MockRepo{subastas: map[string]*domain.Subasta{"sub-stripe-1": auction}}, guarantees,
+	).WithPaymentGateway(stripeAdapter)
+
+	offer, err := service.PrepareStripeIntent(context.Background(), "sub-stripe-1", "postor-01", 0)
+	if err != nil {
+		t.Fatalf("PrepareStripeIntent failed: %v", err)
+	}
+	if offer.RequiredAmount != 300 || offer.CaptureMethod != "manual" {
+		t.Fatalf("expected required amount 300 and manual capture, got %+v", offer)
+	}
+	if !strings.HasPrefix(offer.PaymentIntentID, "pi_stripe_hold_") {
+		t.Fatalf("expected pi_stripe_hold_ prefix, got %s", offer.PaymentIntentID)
+	}
+
+	view, err := service.Create(context.Background(), services.CreateGuaranteeCmd{
+		AuctionID:       "sub-stripe-1",
+		BidderID:        "postor-01",
+		Amount:          offer.HoldAmount,
+		PaymentIntentID: offer.PaymentIntentID,
+	})
+	if err != nil {
+		t.Fatalf("Create with Stripe PaymentIntentID failed: %v", err)
+	}
+	if view.AuthorizationID != offer.PaymentIntentID {
+		t.Fatalf("expected AuthorizationID %s, got %s", offer.PaymentIntentID, view.AuthorizationID)
+	}
+	if view.Status != string(domain.GuaranteeHeld) {
+		t.Fatalf("expected status RETENIDA, got %s", view.Status)
 	}
 }

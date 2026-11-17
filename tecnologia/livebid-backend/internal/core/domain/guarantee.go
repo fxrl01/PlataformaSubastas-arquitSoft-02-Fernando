@@ -17,7 +17,21 @@ var (
 	ErrGuaranteeAlreadyActive = errors.New("domain: ya existe una garantía activa")
 	ErrGuaranteeInsufficient  = errors.New("domain: garantía insuficiente")
 	ErrGuaranteeInvalid       = errors.New("domain: datos de garantía inválidos")
+	ErrStripeHoldFailed       = errors.New("domain: no se pudo retener la garantía en Stripe")
+	ErrStripeWebhookInvalid   = errors.New("domain: firma de webhook Stripe inválida")
 )
+
+// StripePaymentIntent encapsula los metadatos seguros de una pre-autorización (Hold) en Stripe.
+// Cumple RNF-01 (PCI-DSS): nunca contiene PAN ni CVV de tarjeta.
+type StripePaymentIntent struct {
+	PaymentIntentID string  `json:"payment_intent_id"`
+	ClientSecret    string  `json:"client_secret"`
+	PublishableKey  string  `json:"publishable_key"`
+	Amount          float64 `json:"monto"`
+	Currency        string  `json:"moneda"`
+	Status          string  `json:"estado_stripe"`
+	LiveMode        bool    `json:"modo_produccion"`
+}
 
 type Guarantee struct {
 	ID              string
