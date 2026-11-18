@@ -54,8 +54,18 @@ services:
       WEB3_CHAIN_ID: ${WEB3_CHAIN_ID:-8453}
       WEB3_ESCROW_CONTRACT: ${WEB3_ESCROW_CONTRACT:-0x000000000000000000000000000000000000dEaD}
       WEB3_RPC_URL: ${WEB3_RPC_URL:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@livebid.pe}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-AdminLiveBid2026!}
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     depends_on:
       livebid-db:
         condition: service_healthy

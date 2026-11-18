@@ -77,6 +77,12 @@ type GuaranteeRepository interface {
 	SettleAuction(ctx context.Context, auctionID, winnerID string) error
 }
 
+// GuaranteeStatusSynchronizer permite sincronizar el estado de una garantía a partir
+// de eventos asíncronos firmados de la pasarela bancaria (Stripe Webhooks) por su AuthorizationID (pi_...).
+type GuaranteeStatusSynchronizer interface {
+	UpdateStatusByAuthorizationID(ctx context.Context, authorizationID string, status GuaranteeStatus) error
+}
+
 // PaymentGatewayPort define el contrato hexagonal hacia la pasarela de pagos fiduciaria (Stripe).
 // Divide estrictamente las responsabilidades Backend (creación de PaymentIntent Hold, verificación,
 // captura al ganador y liberación al resto) de la captura de tarjeta en el Frontend.
@@ -155,4 +161,9 @@ type AuditTrailRepository interface {
 	ObtenerCadenaAuditoria(ctx context.Context, subastaID string) ([]AuditLogEntry, error)
 	GuardarReciboOnChain(ctx context.Context, receipt OnChainSettlementReceipt) error
 	ObtenerReciboOnChain(ctx context.Context, subastaID string) (*OnChainSettlementReceipt, error)
+}
+
+// AuditEventAppender permite anexar hitos del ciclo de vida de la subasta en la cadena SHA-256 de logs_auditoria.
+type AuditEventAppender interface {
+	AppendAuditEvent(ctx context.Context, subastaID, event string, payload map[string]any) error
 }

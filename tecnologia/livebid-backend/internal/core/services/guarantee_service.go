@@ -144,9 +144,37 @@ func (s *GuaranteeService) HandleStripeWebhook(ctx context.Context, payload []by
 	}
 	var event struct {
 		Type string `json:"type"`
+		Data struct {
+			Object struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+			} `json:"object"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(payload, &event); err != nil || strings.TrimSpace(event.Type) == "" {
 		return "stripe.webhook.verified", nil
+	}
+
+	intentID := strings.TrimSpace(event.Data.Object.ID)
+	if intentID != "" {
+		if syncRepo, ok := s.guarantees.(domain.GuaranteeStatusSynchronizer); ok {
+			switch event.Type {
+			case "payment_intent.succeeded":
+				_ = s.paymentGateway.CaptureHoldIntent(ctx, intentID)
+				if err := syncRepo.UpdateStatusByAuthorizationID(ctx, intentID, domain.GuaranteeCaptured); err != nil {
+					return "", err
+				}
+			case "payment_intent.canceled", "payment_intent.payment_failed":
+				_ = s.paymentGateway.CancelHoldIntent(ctx, intentID)
+				if err := syncRepo.UpdateStatusByAuthorizationID(ctx, intentID, domain.GuaranteeReleased); err != nil {
+					return "", err
+				}
+			case "payment_intent.amount_capturable_updated":
+				if err := syncRepo.UpdateStatusByAuthorizationID(ctx, intentID, domain.GuaranteeHeld); err != nil {
+					return "", err
+				}
+			}
+		}
 	}
 	return event.Type, nil
 }

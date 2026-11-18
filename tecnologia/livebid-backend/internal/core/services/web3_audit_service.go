@@ -25,6 +25,7 @@ type Web3AuditReport struct {
 	TotalAuditedBids int                             `json:"total_pujas_auditadas"`
 	ChainIntact      bool                            `json:"cadena_integra"`
 	LeafHashes       []string                        `json:"hashes_hojas"`
+	AuditChain       []domain.AuditLogEntry          `json:"cadena_eventos"`
 	OnChainReceipt   *domain.OnChainSettlementReceipt `json:"recibo_onchain,omitempty"`
 	MerkleProof      *MerkleProofView                `json:"prueba_merkle,omitempty"`
 }
@@ -68,6 +69,7 @@ func (s *Web3AuditService) InspectAuction(ctx context.Context, auctionID string,
 		TotalAuditedBids: len(hashes),
 		ChainIntact:      verifyHashChain(chain),
 		LeafHashes:       formattedLeaves,
+		AuditChain:       chain,
 		OnChainReceipt:   receipt,
 	}
 

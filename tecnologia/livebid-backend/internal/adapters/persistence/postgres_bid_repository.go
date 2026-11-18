@@ -274,3 +274,31 @@ func (r *PostgresBidRepository) ObtenerReciboOnChain(ctx context.Context, subast
 	}
 	return &receipt, nil
 }
+
+func (r *PostgresBidRepository) AppendAuditEvent(ctx context.Context, subastaID, event string, payload map[string]any) error {
+	var prevHash *string
+	_ = r.pool.QueryRow(ctx, `
+		SELECT hash_actual FROM logs_auditoria
+		WHERE subasta_id = $1 ORDER BY id DESC LIMIT 1`, subastaID).Scan(&prevHash)
+
+	prevHashVal := "GENESIS"
+	if prevHash != nil && *prevHash != "" {
+		prevHashVal = *prevHash
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal audit event payload: %w", err)
+	}
+	rawDigest := fmt.Sprintf("%s|%s|%s|%s|%d", prevHashVal, subastaID, event, string(payloadBytes), time.Now().UTC().UnixNano())
+	sum := sha256.Sum256([]byte(rawDigest))
+	currentHash := hex.EncodeToString(sum[:])
+
+	_, err = r.pool.Exec(ctx, `
+		INSERT INTO logs_auditoria (subasta_id, evento, payload, hash_anterior, hash_actual)
+		VALUES ($1, $2, $3, $4, $5)`,
+		subastaID, event, payloadBytes, prevHash, currentHash)
+	if err != nil {
+		return fmt.Errorf("append audit event: %w", err)
+	}
+	return nil
+}

@@ -59,6 +59,22 @@ func (r *PostgresGuaranteeRepository) Save(ctx context.Context, g *domain.Guaran
 	return nil
 }
 
+func (r *PostgresGuaranteeRepository) UpdateStatusByAuthorizationID(ctx context.Context, authorizationID string, status domain.GuaranteeStatus) error {
+	trimmed := strings.TrimSpace(authorizationID)
+	if trimmed == "" {
+		return domain.ErrGuaranteeInvalid
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE garantias
+		SET estado = $1
+		WHERE autorizacion_bancaria_id = $2`,
+		status, trimmed)
+	if err != nil {
+		return fmt.Errorf("update guarantee status by authorization id: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresGuaranteeRepository) SettleAuction(ctx context.Context, auctionID, winnerID string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

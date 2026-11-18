@@ -63,7 +63,7 @@ sequenceDiagram
     participant DB as 🗄️ PostgreSQL 16 (Única BD)
 
     P->>FE: Clic en "Autorizar Garantía con Tarjeta"
-    FE->>BE: POST /api/v1/subastas/{id}/garantias/intent
+    FE->>BE: POST /api/v1/subastas/{id}/garantias/stripe-intent
     Note over BE,DB: Backend lee precio_base en PostgreSQL<br/>y calcula garantía (10% o 20% según riesgo IA)
     BE->>ST: Crea PaymentIntent (amount, currency="usd", capture_method="manual")
     ST-->>BE: Devuelve { id: "pi_...", client_secret: "pi_..._secret_..." }

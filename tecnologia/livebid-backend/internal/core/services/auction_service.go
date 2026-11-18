@@ -98,7 +98,21 @@ func (s *AuctionCatalogService) Crear(ctx context.Context, cmd CrearSubastaCmd) 
 	if err := s.repo.Guardar(ctx, subasta); err != nil {
 		return nil, err
 	}
+	s.appendAudit(ctx, subasta.ID, "SUBASTA_CREADA", map[string]any{
+		"titulo":      subasta.Titulo,
+		"precio_base": subasta.PrecioBase,
+		"vendedor_id": subasta.VendedorID,
+	})
 	return subasta, nil
+}
+
+func (s *AuctionCatalogService) appendAudit(ctx context.Context, subastaID, event string, payload map[string]any) {
+	if s.auditRepo == nil {
+		return
+	}
+	if appender, ok := s.auditRepo.(domain.AuditEventAppender); ok {
+		_ = appender.AppendAuditEvent(ctx, subastaID, event, payload)
+	}
 }
 
 // ActualizarEncargado asigna o actualiza los detalles del martillero/encargado oficial de la subasta.
@@ -113,6 +127,11 @@ func (s *AuctionCatalogService) ActualizarEncargado(ctx context.Context, id stri
 	if err := s.repo.Guardar(ctx, subasta); err != nil {
 		return nil, err
 	}
+	s.appendAudit(ctx, subasta.ID, "ENCARGADO_ASIGNADO", map[string]any{
+		"martillero_id": subasta.MartilleroID,
+		"nombre":        encargado.Nombre,
+		"licencia":      encargado.Licencia,
+	})
 	return subasta, nil
 }
 
@@ -128,6 +147,11 @@ func (s *AuctionCatalogService) ActualizarDetallesLote(ctx context.Context, id s
 	if err := s.repo.Guardar(ctx, subasta); err != nil {
 		return nil, err
 	}
+	s.appendAudit(ctx, subasta.ID, "DETALLES_LOTE_ACTUALIZADOS", map[string]any{
+		"categoria":      detalles.Categoria,
+		"ubicacion":      detalles.Ubicacion,
+		"total_imagenes": len(detalles.ImagenesURLs),
+	})
 	return subasta, nil
 }
 
@@ -150,7 +174,11 @@ func (s *AuctionCatalogService) Activar(ctx context.Context, id string) error {
 	if err := subasta.Activar(); err != nil {
 		return err
 	}
-	return s.repo.Guardar(ctx, subasta)
+	if err := s.repo.Guardar(ctx, subasta); err != nil {
+		return err
+	}
+	s.appendAudit(ctx, subasta.ID, "SALA_ACTIVADA", map[string]any{"estado": subasta.Estado})
+	return nil
 }
 
 func (s *AuctionCatalogService) IniciarConteo(ctx context.Context, id string) error {
@@ -161,7 +189,11 @@ func (s *AuctionCatalogService) IniciarConteo(ctx context.Context, id string) er
 	if err := subasta.IniciarConteo(); err != nil {
 		return err
 	}
-	return s.repo.Guardar(ctx, subasta)
+	if err := s.repo.Guardar(ctx, subasta); err != nil {
+		return err
+	}
+	s.appendAudit(ctx, subasta.ID, "CONTEO_MARTILLO_INICIADO", map[string]any{"estado": subasta.Estado, "precio_actual": subasta.PrecioActual})
+	return nil
 }
 
 func (s *AuctionCatalogService) Cerrar(ctx context.Context, id string) error {

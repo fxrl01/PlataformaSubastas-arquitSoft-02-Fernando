@@ -172,6 +172,19 @@ func (m *mockAuditTrailRepo) ObtenerReciboOnChain(context.Context, string) (*dom
 	return m.receipt, nil
 }
 
+func (m *mockAuditTrailRepo) AppendAuditEvent(_ context.Context, _ string, event string, _ map[string]any) error {
+	prev := "GENESIS"
+	if len(m.chain) > 0 {
+		prev = m.chain[len(m.chain)-1].CurrentHash
+	}
+	m.chain = append(m.chain, domain.AuditLogEntry{
+		Event:        event,
+		PreviousHash: prev,
+		CurrentHash:  "hash_" + event,
+	})
+	return nil
+}
+
 func TestAuctionCloseAnchorsMerkleRootOnChainAndWeb3AuditInspectsProof(t *testing.T) {
 	start := time.Now()
 	auction := domain.NuevaSubasta("sub-web3", "Arte NFT", "", 1000, start, start.Add(time.Hour))
@@ -211,6 +224,9 @@ func TestAuctionCloseAnchorsMerkleRootOnChainAndWeb3AuditInspectsProof(t *testin
 	}
 	if report.OnChainReceipt == nil || report.OnChainReceipt.MerkleRoot != report.MerkleRoot {
 		t.Fatalf("expected onchain receipt Merkle root to match report root, got %+v", report)
+	}
+	if len(report.AuditChain) != 2 {
+		t.Fatalf("expected 2 entries in AuditChain, got %d", len(report.AuditChain))
 	}
 }
 

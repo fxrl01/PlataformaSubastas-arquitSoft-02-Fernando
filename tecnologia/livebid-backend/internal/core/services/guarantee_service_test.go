@@ -2,6 +2,10 @@ package services_test
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -16,10 +20,12 @@ type mockGuaranteeRepository struct {
 	saved            *domain.Guarantee
 	settledAuctionID string
 	settledWinnerID  string
+	syncedAuthID     string
+	syncedStatus     domain.GuaranteeStatus
 }
 
 func (r *mockGuaranteeRepository) FindActive(context.Context, string, string) (*domain.Guarantee, error) {
-	if r.active == nil {
+	if r.active == nil || (r.active.Status != "" && r.active.Status != domain.GuaranteeHeld) {
 		return nil, domain.ErrUserNotFound
 	}
 	return r.active, nil
@@ -34,6 +40,15 @@ func (r *mockGuaranteeRepository) Save(_ context.Context, guarantee *domain.Guar
 func (r *mockGuaranteeRepository) SettleAuction(_ context.Context, auctionID, winnerID string) error {
 	r.settledAuctionID = auctionID
 	r.settledWinnerID = winnerID
+	return nil
+}
+
+func (r *mockGuaranteeRepository) UpdateStatusByAuthorizationID(_ context.Context, authorizationID string, status domain.GuaranteeStatus) error {
+	r.syncedAuthID = authorizationID
+	r.syncedStatus = status
+	if r.active != nil && r.active.AuthorizationID == authorizationID {
+		r.active.Status = status
+	}
 	return nil
 }
 
@@ -149,5 +164,65 @@ func TestStripeIntentAndGuaranteeConfirmationFlow(t *testing.T) {
 	}
 	if view.Status != string(domain.GuaranteeHeld) {
 		t.Fatalf("expected status RETENIDA, got %s", view.Status)
+	}
+}
+
+func signStripePayload(secret string, payload []byte) string {
+	ts := "1731888000"
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(ts + "."))
+	mac.Write(payload)
+	return fmt.Sprintf("t=%s,v1=%s", ts, hex.EncodeToString(mac.Sum(nil)))
+}
+
+func TestStripeWebhookSynchronizesGuaranteeStatus(t *testing.T) {
+	now := time.Now()
+	auction := domain.NuevaSubasta("sub-webhook-1", "Reloj Omega", "", 5000, now, now.Add(time.Hour))
+	guarantees := &mockGuaranteeRepository{}
+	webhookSecret := "whsec_webhook_sync_secret"
+	stripeAdapter := payments.NewStripeAdapter("", "pk_test_demo", webhookSecret)
+	service := services.NewGuaranteeService(
+		&MockRepo{subastas: map[string]*domain.Subasta{"sub-webhook-1": auction}}, guarantees,
+	).WithPaymentGateway(stripeAdapter)
+
+	offer, err := service.PrepareStripeIntent(context.Background(), "sub-webhook-1", "postor-wh", 0)
+	if err != nil {
+		t.Fatalf("PrepareStripeIntent failed: %v", err)
+	}
+	if _, err := service.Create(context.Background(), services.CreateGuaranteeCmd{
+		AuctionID:       "sub-webhook-1",
+		BidderID:        "postor-wh",
+		Amount:          offer.HoldAmount,
+		PaymentIntentID: offer.PaymentIntentID,
+	}); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	// 1. Evento asíncrono de cancelación / fallo revoca la garantía a LIBERADA
+	cancelPayload := []byte(fmt.Sprintf(`{"id":"evt_cancel","type":"payment_intent.canceled","data":{"object":{"id":"%s","status":"canceled"}}}`, offer.PaymentIntentID))
+	eventType, err := service.HandleStripeWebhook(context.Background(), cancelPayload, signStripePayload(webhookSecret, cancelPayload))
+	if err != nil {
+		t.Fatalf("HandleStripeWebhook canceled failed: %v", err)
+	}
+	if eventType != "payment_intent.canceled" {
+		t.Fatalf("expected payment_intent.canceled, got %s", eventType)
+	}
+	if guarantees.syncedAuthID != offer.PaymentIntentID || guarantees.syncedStatus != domain.GuaranteeReleased {
+		t.Fatalf("expected guarantee status LIBERADA on cancel webhook, got auth=%s status=%s", guarantees.syncedAuthID, guarantees.syncedStatus)
+	}
+
+	// 2. Evento asíncrono de captura exitosa actualiza la garantía a CAPTURADA_COBRO
+	succeedPayload := []byte(fmt.Sprintf(`{"id":"evt_succ","type":"payment_intent.succeeded","data":{"object":{"id":"%s","status":"succeeded"}}}`, offer.PaymentIntentID))
+	eventType, err = service.HandleStripeWebhook(context.Background(), succeedPayload, signStripePayload(webhookSecret, succeedPayload))
+	if err != nil {
+		t.Fatalf("HandleStripeWebhook succeeded failed: %v", err)
+	}
+	if eventType != "payment_intent.succeeded" || guarantees.syncedStatus != domain.GuaranteeCaptured {
+		t.Fatalf("expected CAPTURADA_COBRO on succeeded webhook, got type=%s status=%s", eventType, guarantees.syncedStatus)
+	}
+
+	// 3. Firma inválida es rechazada con ErrStripeWebhookInvalid
+	if _, err := service.HandleStripeWebhook(context.Background(), succeedPayload, "t=1731888000,v1=invalid"); err != domain.ErrStripeWebhookInvalid {
+		t.Fatalf("expected ErrStripeWebhookInvalid, got %v", err)
 	}
 }
