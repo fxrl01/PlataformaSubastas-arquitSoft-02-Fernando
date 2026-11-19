@@ -1,0 +1,147 @@
+name: LiveBid CI — Build, Tests, E2E & k6 Load
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go-unit-and-integration:
+    name: Go Vet, Race Tests & Postgres/Redis Integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: livebid_db
+          POSTGRES_USER: livebid_admin
+          POSTGRES_PASSWORD: ci_postgres_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U livebid_admin -d livebid_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go 1.23
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: tecnologia/livebid-backend/go.sum
+
+      - name: Initialize PostgreSQL schema
+        env:
+          PGPASSWORD: ci_postgres_password
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          psql -h localhost -U livebid_admin -d livebid_db -f docker/init.sql
+
+      - name: Run go vet & build server
+        working-directory: tecnologia/livebid-backend
+        run: |
+          go vet ./...
+          go build -o /tmp/livebid-server ./cmd/server
+
+      - name: Run Go unit & live integration tests with race detector
+        working-directory: tecnologia/livebid-backend
+        env:
+          TEST_DATABASE_URL: postgres://livebid_admin:ci_postgres_password@localhost:5432/livebid_db
+          TEST_REDIS_URL: redis://localhost:6379
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -n 15
+
+      - name: Upload Go coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-report
+          path: tecnologia/livebid-backend/coverage.out
+
+  e2e-and-load-cluster:
+    name: Docker Cluster + Playwright E2E + k6 Load Test
+    runs-on: ubuntu-latest
+    needs: go-unit-and-integration
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create CI .env and validate Docker Compose
+        run: |
+          cat << 'EOF' > .env
+          PORT=3000
+          POSTGRES_USER=livebid_admin
+          POSTGRES_PASSWORD=ci_postgres_password
+          JWT_SECRET=ci-super-secret-jwt-key-livebid-2026
+          ADMIN_BOOTSTRAP_EMAIL=admin@livebid.pe
+          ADMIN_BOOTSTRAP_PASSWORD=AdminLiveBid2026!
+          STRIPE_PUBLISHABLE_KEY=pk_test_ci_livebid
+          STRIPE_WEBHOOK_SECRET=whsec_ci_livebid
+          EOF
+          docker compose config -q
+
+      - name: Start full scalable cluster (Nginx + 2 Go replicas + PgBouncer + Postgres + Redis)
+        run: |
+          docker compose up --build -d
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health | grep -q '"status":"UP"'; then
+              echo "Cluster healthy!"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:3000/health
+
+      - name: Setup Node.js and install Playwright Chromium
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/e2e/package-lock.json
+
+      - name: Run Playwright E2E suite (2 browsers + WebSocket + Stripe + Merkle)
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+          npx playwright test
+
+      - name: Run k6 load & WebSocket benchmark
+        run: |
+          mkdir -p tests/load/results
+          docker run --rm --network host -u $(id -u):$(id -g) \
+            -v "$PWD/tests/load:/scripts" \
+            grafana/k6 run /scripts/livebid-load.js
+
+      - name: Upload Playwright & k6 reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-and-k6-reports
+          path: |
+            tests/e2e/playwright-report/
+            tests/load/results/
+
+      - name: Teardown Docker cluster
+        if: always()
+        run: docker compose down -v
