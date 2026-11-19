@@ -151,7 +151,13 @@ func (s *AuctionBidService) PlaceBid(ctx context.Context, cmd PlaceBidCmd) (BidR
 		return BidResponse{}, err
 	}
 	if err := s.bids.RegistrarPujaAtomica(ctx, subasta.ID, *puja, precioAnterior, subasta.FechaCierre, extended, cmd.IdempotencyKey); err != nil {
+		if invalidator, ok := s.auctions.(interface{ InvalidateAuction(context.Context, string) }); ok {
+			invalidator.InvalidateAuction(ctx, subasta.ID)
+		}
 		return BidResponse{}, err
+	}
+	if invalidator, ok := s.auctions.(interface{ InvalidateAuction(context.Context, string) }); ok {
+		invalidator.InvalidateAuction(ctx, subasta.ID)
 	}
 	if s.notifier != nil {
 		if err := s.notifier.BroadcastNuevaPuja(ctx, subasta.ID, *puja, extended, subasta.FechaCierre); err != nil {

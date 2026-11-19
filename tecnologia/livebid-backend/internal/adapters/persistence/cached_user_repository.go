@@ -2,11 +2,15 @@ package persistence
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
+	"github.com/redis/go-redis/v9"
 )
+
+const userCacheInvalidateChannel = "livebid:cache:user:invalidate"
 
 type cachedUserEntry struct {
 	user      domain.User
@@ -14,13 +18,41 @@ type cachedUserEntry struct {
 }
 
 // CachedUserRepository decora un domain.UserRepository con caché TTL en memoria
-// para evitar consultas repetitivas a PostgreSQL en el middleware RequireAuth durante ráfagas de pujas.
+// e invalidación distribuida vía Redis Pub/Sub entre réplicas horizontales.
 type CachedUserRepository struct {
-	mu      sync.RWMutex
-	inner   domain.UserRepository
-	ttl     time.Duration
-	entries map[string]cachedUserEntry
-	now     func() time.Time
+	mu          sync.RWMutex
+	inner       domain.UserRepository
+	ttl         time.Duration
+	entries     map[string]cachedUserEntry
+	now         func() time.Time
+	redisClient *redis.Client
+}
+
+// WithRedisInvalidation habilita la propagación multi-instancia de invalidación RBAC/KYC.
+func (r *CachedUserRepository) WithRedisInvalidation(ctx context.Context, client *redis.Client) *CachedUserRepository {
+	if client == nil {
+		return r
+	}
+	r.redisClient = client
+	go func() {
+		pubsub := client.Subscribe(ctx, userCacheInvalidateChannel)
+		defer func() { _ = pubsub.Close() }()
+		ch := pubsub.Channel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				if id := strings.TrimSpace(msg.Payload); id != "" {
+					r.invalidateLocal(id)
+				}
+			}
+		}
+	}()
+	return r
 }
 
 func NewCachedUserRepository(inner domain.UserRepository, ttl time.Duration) *CachedUserRepository {
@@ -113,6 +145,15 @@ func (r *CachedUserRepository) UpdateRole(ctx context.Context, id string, role d
 }
 
 func (r *CachedUserRepository) Invalidate(id string) {
+	r.invalidateLocal(id)
+	if r.redisClient != nil && id != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		_ = r.redisClient.Publish(ctx, userCacheInvalidateChannel, id).Err()
+		cancel()
+	}
+}
+
+func (r *CachedUserRepository) invalidateLocal(id string) {
 	r.mu.Lock()
 	delete(r.entries, id)
 	r.mu.Unlock()

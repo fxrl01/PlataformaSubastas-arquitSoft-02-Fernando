@@ -21,7 +21,6 @@ import (
 	"github.com/fxrl01/livebid-backend/internal/adapters/web3"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/fxrl01/livebid-backend/internal/core/services"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,13 +30,14 @@ func main() {
 	log.Println(" Optimizado para AWS Free Tier (< 30 MB RAM, Latencia < 5ms)")
 	log.Println("=================================================================")
 
-	// 1. Conexión a PostgreSQL y migración idempotente de esquema
+	// 1. Conexión a PostgreSQL (Pool configurado + soporte Read Replica) y migración idempotente de esquema
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
 	}
+	poolOpts := persistence.DefaultPoolOptionsFromEnv()
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	pool, err := pgxpool.New(dbCtx, databaseURL)
+	pool, err := persistence.NewPostgresPool(dbCtx, databaseURL, poolOpts)
 	dbCancel()
 	if err != nil {
 		log.Fatalf("open database pool: %v", err)
@@ -50,14 +50,37 @@ func main() {
 		log.Printf("advertencia en migración automática de esquema: %v", err)
 	}
 
-	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub)
+	readPool := pool
+	readReplicaEnabled := false
+	if readURL := os.Getenv("READ_DATABASE_URL"); readURL != "" && readURL != databaseURL {
+		rCtx, rCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if rp, rErr := persistence.NewPostgresPool(rCtx, readURL, poolOpts); rErr == nil {
+			if pErr := rp.Ping(context.Background()); pErr == nil {
+				readPool = rp
+				readReplicaEnabled = true
+				defer rp.Close()
+				log.Println("Read Replica PostgreSQL conectada para consultas de catálogo/auditoría")
+			} else {
+				rp.Close()
+				log.Printf("advertencia: READ_DATABASE_URL no responde (%v), usando pool principal", pErr)
+			}
+		} else {
+			log.Printf("advertencia: no se pudo abrir READ_DATABASE_URL (%v), usando pool principal", rErr)
+		}
+		rCancel()
+	}
+
+	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub + Caché Distribuida)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("ping redis: %v", err)
 	}
 
-	// 3. Seguridad, Repositorios y Caché TTL
+	// 3. Seguridad, Repositorios, Caché Distribuida e Invalidación Multi-Instancia
+	cacheCtx, cancelCache := context.WithCancel(context.Background())
+	defer cancelCache()
+
 	jwtIssuer, err := security.NewJWTIssuer(os.Getenv("JWT_SECRET"))
 	if err != nil {
 		log.Fatalf("configure jwt: %v", err)
@@ -65,9 +88,15 @@ func main() {
 	userRepository := persistence.NewCachedUserRepository(
 		persistence.NewPostgresUserRepository(pool),
 		30*time.Second,
+	).WithRedisInvalidation(cacheCtx, redisClient)
+	auctionTTL := time.Duration(envInt("AUCTION_CACHE_TTL_SEC", 15)) * time.Second
+	pgAuctionRepo := persistence.NewPostgresAuctionRepositoryWithReadPool(pool, readPool)
+	auctionRepository := persistence.NewCachedAuctionRepository(
+		pgAuctionRepo,
+		persistence.NewRedisDistributedCache(redisClient),
+		auctionTTL,
 	)
-	auctionRepository := persistence.NewPostgresAuctionRepository(pool)
-	bidRepository := persistence.NewPostgresBidRepository(pool)
+	bidRepository := persistence.NewPostgresBidRepositoryWithReadPool(pool, readPool)
 	guaranteeRepository := persistence.NewPostgresGuaranteeRepository(pool)
 	bidLock := persistence.NewRedisBidLock(redisClient)
 	bidNotifier := realtime.NewRedisBidNotifier(redisClient)
@@ -138,9 +167,10 @@ func main() {
 	// 6. Router HTTP estándar de Go
 	mux := http.NewServeMux()
 
+	instanceID := envStr("INSTANCE_ID", "livebid-api-primary")
 	publicDir := resolvePublicDir()
 	if publicDir != "" {
-		fileServer := http.FileServer(http.Dir(publicDir))
+		fileServer := withStaticCache(http.FileServer(http.Dir(publicDir)))
 		mux.Handle("GET /{$}", fileServer)
 		mux.Handle("GET /index.html", fileServer)
 		mux.Handle("GET /styles.css", fileServer)
@@ -149,9 +179,10 @@ func main() {
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-LiveBid-Instance", instanceID)
 		w.WriteHeader(http.StatusOK)
-		resp := fmt.Sprintf(`{"status":"UP","engine":"Go 1.23","architecture":"Clean/Hexagonal","circuit_breaker_ia":"%s","active_ai_model":"%s","web3_chain_id":%d}`,
-			riskBreaker.State(), aiRouter.ActiveModel(), chainID)
+		resp := fmt.Sprintf(`{"status":"UP","instance":"%s","engine":"Go 1.23","architecture":"Clean/Hexagonal","cache":"redis-aside","read_replica":%t,"circuit_breaker_ia":"%s","active_ai_model":"%s","web3_chain_id":%d}`,
+			instanceID, readReplicaEnabled, riskBreaker.State(), aiRouter.ActiveModel(), chainID)
 		_, _ = w.Write([]byte(resp))
 	})
 
@@ -281,13 +312,26 @@ func main() {
 }
 
 func withCORS(next http.Handler) http.Handler {
+	instanceID := envStr("INSTANCE_ID", "livebid-api-primary")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-LiveBid-Instance", instanceID)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, Stripe-Signature, X-Web3-Wallet, X-Web3-Signature, X-Web3-Nonce, X-Web3-Deadline, X-AI-Agent-Mandate")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withStaticCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
 		}
 		next.ServeHTTP(w, r)
 	})

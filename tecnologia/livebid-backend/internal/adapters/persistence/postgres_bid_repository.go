@@ -16,11 +16,27 @@ import (
 )
 
 type PostgresBidRepository struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	readPool *pgxpool.Pool
 }
 
 func NewPostgresBidRepository(pool *pgxpool.Pool) *PostgresBidRepository {
-	return &PostgresBidRepository{pool: pool}
+	return &PostgresBidRepository{pool: pool, readPool: pool}
+}
+
+// NewPostgresBidRepositoryWithReadPool enruta consultas de historial y auditoría hacia la réplica de lectura.
+func NewPostgresBidRepositoryWithReadPool(writePool, readPool *pgxpool.Pool) *PostgresBidRepository {
+	if readPool == nil {
+		readPool = writePool
+	}
+	return &PostgresBidRepository{pool: writePool, readPool: readPool}
+}
+
+func (r *PostgresBidRepository) reader() *pgxpool.Pool {
+	if r.readPool != nil {
+		return r.readPool
+	}
+	return r.pool
 }
 
 func (r *PostgresBidRepository) BuscarPorIdempotencyKey(ctx context.Context, subastaID, bidderID, key string) (*domain.Puja, error) {
@@ -127,8 +143,8 @@ func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subast
 	})
 	_, err = tx.Exec(ctx, `
 		INSERT INTO logs_auditoria (subasta_id, evento, payload, hash_anterior, hash_actual)
-		VALUES ($1, 'PUJA_REGISTRADA', $2, $3, $4)`,
-		subastaID, auditPayload, prevHash, auditHash)
+		VALUES ($1, 'PUJA_REGISTRADA', $2::jsonb, $3, $4)`,
+		subastaID, string(auditPayload), prevHash, auditHash)
 	if err != nil {
 		return fmt.Errorf("insert audit log: %w", err)
 	}
@@ -139,7 +155,7 @@ func (r *PostgresBidRepository) RegistrarPujaAtomica(ctx context.Context, subast
 }
 
 func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID, bidderID string, minimumAmount float64, limit, offset int) ([]domain.Puja, int, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := r.reader().Query(ctx, `
 		SELECT id, subasta_id, postor_id, monto::text, timestamp_oficial
 		FROM pujas
 		WHERE subasta_id = $1
@@ -169,7 +185,7 @@ func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID,
 		return nil, 0, fmt.Errorf("iterate auction bids: %w", err)
 	}
 	var total int
-	if err := r.pool.QueryRow(ctx, `
+	if err := r.reader().QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM pujas
 		WHERE subasta_id = $1
@@ -182,7 +198,7 @@ func (r *PostgresBidRepository) ListarPorSubasta(ctx context.Context, subastaID,
 }
 
 func (r *PostgresBidRepository) ObtenerHashesAuditoria(ctx context.Context, subastaID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := r.reader().Query(ctx, `
 		SELECT id, postor_id, monto::text, correlativo, timestamp_oficial, COALESCE(hash_auditoria, '')
 		FROM pujas
 		WHERE subasta_id = $1
@@ -211,7 +227,7 @@ func (r *PostgresBidRepository) ObtenerHashesAuditoria(ctx context.Context, suba
 }
 
 func (r *PostgresBidRepository) ObtenerCadenaAuditoria(ctx context.Context, subastaID string) ([]domain.AuditLogEntry, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := r.reader().Query(ctx, `
 		SELECT evento, COALESCE(hash_anterior, 'GENESIS'), hash_actual
 		FROM logs_auditoria
 		WHERE subasta_id = $1
@@ -248,8 +264,8 @@ func (r *PostgresBidRepository) GuardarReciboOnChain(ctx context.Context, receip
 	}
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO logs_auditoria (subasta_id, evento, payload, hash_anterior, hash_actual)
-		VALUES ($1, 'CIERRE_ONCHAIN_MERKLE', $2, $3, $4)`,
-		receipt.AuctionID, payload, prevHash, txHashNormalized)
+		VALUES ($1, 'CIERRE_ONCHAIN_MERKLE', $2::jsonb, $3, $4)`,
+		receipt.AuctionID, string(payload), prevHash, txHashNormalized)
 	if err != nil {
 		return fmt.Errorf("save onchain settlement receipt: %w", err)
 	}
@@ -258,7 +274,7 @@ func (r *PostgresBidRepository) GuardarReciboOnChain(ctx context.Context, receip
 
 func (r *PostgresBidRepository) ObtenerReciboOnChain(ctx context.Context, subastaID string) (*domain.OnChainSettlementReceipt, error) {
 	var payload []byte
-	err := r.pool.QueryRow(ctx, `
+	err := r.reader().QueryRow(ctx, `
 		SELECT payload FROM logs_auditoria
 		WHERE subasta_id = $1 AND evento = 'CIERRE_ONCHAIN_MERKLE'
 		ORDER BY id DESC LIMIT 1`, subastaID).Scan(&payload)
@@ -295,8 +311,8 @@ func (r *PostgresBidRepository) AppendAuditEvent(ctx context.Context, subastaID,
 
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO logs_auditoria (subasta_id, evento, payload, hash_anterior, hash_actual)
-		VALUES ($1, $2, $3, $4, $5)`,
-		subastaID, event, payloadBytes, prevHash, currentHash)
+		VALUES ($1, $2, $3::jsonb, $4, $5)`,
+		subastaID, event, string(payloadBytes), prevHash, currentHash)
 	if err != nil {
 		return fmt.Errorf("append audit event: %w", err)
 	}

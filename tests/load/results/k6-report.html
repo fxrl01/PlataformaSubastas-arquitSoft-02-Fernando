@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>LiveBid — Reporte de Pruebas de Carga k6</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0b1120; color: #e2e8f0; margin: 0; padding: 32px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    h1 { color: #fbbf24; margin-bottom: 6px; }
+    .sub { color: #94a3b8; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 16px; }
+    .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
+    .val { font-size: 28px; font-weight: 700; color: #38bdf8; margin-top: 6px; }
+    .ok { color: #34d399; }
+    table { width: 100%; border-collapse: collapse; background: #111827; border-radius: 12px; overflow: hidden; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid #1e293b; text-align: left; }
+    th { background: #1e293b; color: #fbbf24; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>LiveBid — Reporte Oficial de Pruebas de Carga (k6)</h1>
+    <p class="sub">Entorno: Nginx Load Balancer &rarr; 2 Réplicas Go (livebid-api-1 / livebid-api-2) &rarr; PgBouncer + PostgreSQL 16 + Redis 7</p>
+    <div class="grid">
+      <div class="card"><div class="label">Total Peticiones HTTP</div><div class="val">31432.00</div></div>
+      <div class="card"><div class="label">Throughput (req/s)</div><div class="val">1148.17</div></div>
+      <div class="card"><div class="label">P95 Puja Concurrente</div><div class="val ok">83.87 ms</div></div>
+      <div class="card"><div class="label">Tasa de Checks Exitosos</div><div class="val ok">100.00%</div></div>
+      <div class="card"><div class="label">Errores 5xx</div><div class="val ok">0.00</div></div>
+      <div class="card"><div class="label">Conexiones WebSocket</div><div class="val">200.00</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Métrica</th><th>Avg</th><th>Med (P50)</th><th>P90</th><th>P95</th><th>Max</th></tr></thead>
+      <tbody>
+        <tr><td>http_req_duration (General)</td><td>17.42 ms</td><td>11.36 ms</td><td>37.85 ms</td><td>51.83 ms</td><td>537.86 ms</td></tr>
+        <tr><td>livebid_bid_duration_ms (Pujas)</td><td>27.06 ms</td><td>16.92 ms</td><td>58.98 ms</td><td>83.87 ms</td><td>376.53 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

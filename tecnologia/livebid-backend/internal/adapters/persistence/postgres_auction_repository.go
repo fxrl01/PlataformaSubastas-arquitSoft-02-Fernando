@@ -14,11 +14,27 @@ import (
 )
 
 type PostgresAuctionRepository struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	readPool *pgxpool.Pool
 }
 
 func NewPostgresAuctionRepository(pool *pgxpool.Pool) *PostgresAuctionRepository {
-	return &PostgresAuctionRepository{pool: pool}
+	return &PostgresAuctionRepository{pool: pool, readPool: pool}
+}
+
+// NewPostgresAuctionRepositoryWithReadPool permite enrutar lecturas de catálogo a una réplica de lectura.
+func NewPostgresAuctionRepositoryWithReadPool(writePool, readPool *pgxpool.Pool) *PostgresAuctionRepository {
+	if readPool == nil {
+		readPool = writePool
+	}
+	return &PostgresAuctionRepository{pool: writePool, readPool: readPool}
+}
+
+func (r *PostgresAuctionRepository) reader() *pgxpool.Pool {
+	if r.readPool != nil {
+		return r.readPool
+	}
+	return r.pool
 }
 
 const auctionSelectColumns = `
@@ -29,7 +45,7 @@ const auctionSelectColumns = `
 
 func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string) (*domain.Subasta, error) {
 	query := auctionSelectColumns + ` WHERE id = $1`
-	subasta, err := scanAuction(r.pool.QueryRow(ctx, query, id))
+	subasta, err := scanAuction(r.reader().QueryRow(ctx, query, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrSubastaNoEncontrada
 	}
@@ -40,7 +56,7 @@ func (r *PostgresAuctionRepository) ObtenerPorID(ctx context.Context, id string)
 }
 
 func (r *PostgresAuctionRepository) Listar(ctx context.Context) ([]*domain.Subasta, error) {
-	rows, err := r.pool.Query(ctx, auctionSelectColumns+` ORDER BY created_at DESC`)
+	rows, err := r.reader().Query(ctx, auctionSelectColumns+` ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list auctions: %w", err)
 	}

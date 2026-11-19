@@ -1,3 +1,25 @@
+x-api-env: &api-env
+  PORT: 3000
+  DATABASE_URL: postgres://${POSTGRES_USER:-livebid_admin}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}@livebid-pgbouncer:5432/livebid_db
+  READ_DATABASE_URL: ${READ_DATABASE_URL:-}
+  DB_MAX_CONNS: ${DB_MAX_CONNS:-25}
+  DB_MIN_CONNS: ${DB_MIN_CONNS:-4}
+  DB_PGBOUNCER_MODE: "true"
+  REDIS_URL: redis://livebid-cache:6379
+  AUCTION_CACHE_TTL_SEC: ${AUCTION_CACHE_TTL_SEC:-15}
+  JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET in .env}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  CIRCUIT_BREAKER_TIMEOUT_MS: ${CIRCUIT_BREAKER_TIMEOUT_MS:-2000}
+  CIRCUIT_BREAKER_FAIL_THRESHOLD: ${CIRCUIT_BREAKER_FAIL_THRESHOLD:-3}
+  WEB3_CHAIN_ID: ${WEB3_CHAIN_ID:-8453}
+  WEB3_ESCROW_CONTRACT: ${WEB3_ESCROW_CONTRACT:-0x000000000000000000000000000000000000dEaD}
+  WEB3_RPC_URL: ${WEB3_RPC_URL:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@livebid.pe}
+  ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-AdminLiveBid2026!}
+
 services:
   livebid-db:
     image: postgres:16-alpine
@@ -14,6 +36,31 @@ services:
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-livebid_admin} -d livebid_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - livebid-net
+
+  livebid-pgbouncer:
+    image: edoburu/pgbouncer:v1.23.1-p0
+    container_name: livebid-pgbouncer
+    restart: always
+    environment:
+      DB_HOST: livebid-db
+      DB_PORT: 5432
+      DB_NAME: livebid_db
+      DB_USER: ${POSTGRES_USER:-livebid_admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 400
+      DEFAULT_POOL_SIZE: 30
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      livebid-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U $${DB_USER:-livebid_admin} -d livebid_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -37,40 +84,69 @@ services:
     networks:
       - livebid-net
 
-  livebid-api:
+  livebid-api-1:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: livebid-api-server
+    container_name: livebid-api-1
     restart: always
     environment:
-      PORT: 3000
-      DATABASE_URL: postgres://${POSTGRES_USER:-livebid_admin}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}@livebid-db:5432/livebid_db
-      REDIS_URL: redis://livebid-cache:6379
-      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET in .env}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      CIRCUIT_BREAKER_TIMEOUT_MS: ${CIRCUIT_BREAKER_TIMEOUT_MS:-2000}
-      CIRCUIT_BREAKER_FAIL_THRESHOLD: ${CIRCUIT_BREAKER_FAIL_THRESHOLD:-3}
-      WEB3_CHAIN_ID: ${WEB3_CHAIN_ID:-8453}
-      WEB3_ESCROW_CONTRACT: ${WEB3_ESCROW_CONTRACT:-0x000000000000000000000000000000000000dEaD}
-      WEB3_RPC_URL: ${WEB3_RPC_URL:-}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@livebid.pe}
-      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-AdminLiveBid2026!}
-    ports:
-      - "${PORT:-3000}:3000"
+      <<: *api-env
+      INSTANCE_ID: livebid-api-1
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
     depends_on:
-      livebid-db:
+      livebid-pgbouncer:
         condition: service_healthy
       livebid-cache:
         condition: service_healthy
+    networks:
+      - livebid-net
+
+  livebid-api-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: livebid-api-2
+    restart: always
+    environment:
+      <<: *api-env
+      INSTANCE_ID: livebid-api-2
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      livebid-pgbouncer:
+        condition: service_healthy
+      livebid-cache:
+        condition: service_healthy
+    networks:
+      - livebid-net
+
+  livebid-gateway:
+    image: nginx:1.27-alpine
+    container_name: livebid-nginx-gateway
+    restart: always
+    ports:
+      - "${PORT:-3000}:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./tecnologia/boilerplate-clean-arquitecture/public:/usr/share/nginx/html:ro
+    depends_on:
+      livebid-api-1:
+        condition: service_healthy
+      livebid-api-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - livebid-net
 

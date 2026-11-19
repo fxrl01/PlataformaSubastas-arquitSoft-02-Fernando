@@ -48,6 +48,14 @@ func NewStripeAdapter(secretKey, publishableKey, webhookSecret string) *StripeAd
 	}
 }
 
+// WithBaseURL permite redirigir las peticiones HTTP de Stripe hacia un servidor de pruebas o sandbox.
+func (a *StripeAdapter) WithBaseURL(baseURL string) *StripeAdapter {
+	if trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/"); trimmed != "" {
+		a.baseURL = trimmed
+	}
+	return a
+}
+
 func (a *StripeAdapter) isRealStripeConfigured() bool {
 	if a.secretKey == "" || strings.HasPrefix(a.secretKey, "replace-") {
 		return false

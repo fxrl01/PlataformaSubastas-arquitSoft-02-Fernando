@@ -54,7 +54,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     activa: true,
     totalPujas: 0,
     geminiOnline: true,
-    timerInterval: null
+    timerInterval: null,
+    ws: null,
+    wsSubastaId: '',
+    seenBidIds: new Set()
   };
 
   // ---------------------------------------------------------------------------
@@ -179,6 +182,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     aplicarPermisosVisualesPorRol();
   }
 
+  function conectarWebSocketSala() {
+    if (!state.authToken || !state.subastaId) return;
+    if (state.ws && state.wsSubastaId === state.subastaId && state.ws.readyState <= WebSocket.OPEN) {
+      return;
+    }
+    if (state.ws) {
+      try { state.ws.close(); } catch (_) {}
+      state.ws = null;
+    }
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${window.location.host}/ws/subastas/${encodeURIComponent(state.subastaId)}?token=${encodeURIComponent(state.authToken)}`;
+    try {
+      const ws = new WebSocket(wsUrl);
+      state.ws = ws;
+      state.wsSubastaId = state.subastaId;
+      ws.addEventListener('message', (msgEvent) => {
+        try {
+          const ev = JSON.parse(msgEvent.data);
+          if (ev.type === 'bid.accepted' && ev.auction_id === state.subastaId) {
+            if (ev.bid_id && state.seenBidIds.has(ev.bid_id)) return;
+            if (ev.bid_id) state.seenBidIds.add(ev.bid_id);
+            state.precioActual = Number(ev.amount);
+            state.postorLiderId = ev.bidder_id;
+            state.postorLiderNombre = `Postor ${ev.bidder_id}`;
+            state.totalPujas++;
+            actualizarPreciosUI();
+            if (ev.extended) dispararReglaAntiSniping();
+            agregarPujaAlTimeline(Number(ev.amount), `Postor ${ev.bidder_id}`, ev.bid_id || 'ws-live');
+          } else if (ev.type === 'auction.closed' && ev.auction_id === state.subastaId) {
+            if (ev.winner_id) {
+              state.postorLiderId = ev.winner_id;
+              state.postorLiderNombre = `Postor ${ev.winner_id}`;
+              state.precioActual = Number(ev.amount || state.precioActual);
+            }
+            finalizarSubastaPorTiempo();
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
   function guardarSesion(token, user) {
     state.authToken = token;
     state.usuarioActual = user;
@@ -186,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('livebid_user', JSON.stringify(user));
     actualizarCabeceraUsuario();
     sincronizarGarantiaActivaBackend();
+    conectarWebSocketSala();
   }
 
   function obtenerTokenActual() {
@@ -221,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   async function sincronizarEstadoInicial() {
+    state.seenBidIds.clear();
     try {
       const res = await fetch(`/api/v1/subastas/${state.subastaId}`);
       if (res.ok) {
@@ -228,10 +274,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.subastaActual = data;
         renderizarSubastaCompleta(data);
       }
+      const histRes = await fetch(`/api/v1/subastas/${state.subastaId}/pujas?page=1&per_page=50`);
+      if (histRes.ok) {
+        const hist = await histRes.json();
+        const items = Array.isArray(hist.items) ? hist.items : [];
+        state.totalPujas = hist.total ?? items.length;
+        items.forEach((b) => { if (b.id) state.seenBidIds.add(b.id); });
+        actualizarPreciosUI();
+      }
     } catch (_) {
       actualizarPreciosUI();
     }
     await sincronizarGarantiaActivaBackend();
+    conectarWebSocketSala();
   }
 
   function renderizarSubastaCompleta(data) {
@@ -949,14 +1004,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         body: JSON.stringify({ monto })
       });
 
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
+        if (data.puja_id) state.seenBidIds.add(data.puja_id);
         procesarPujaExitosa(monto, userName, userId, data.hash_auditoria || generarHashMock());
       } else {
-        procesarPujaExitosa(monto, userName, userId, generarHashMock());
+        mostrarToast(`❌ Puja rechazada (${res.status}): ${data.error || res.statusText}`, 'error');
       }
     } catch (_) {
-      procesarPujaExitosa(monto, userName, userId, generarHashMock());
+      mostrarToast('❌ Error de conexión al emitir la puja en sala.', 'error');
     } finally {
       elBtnEmitirPuja.disabled = false;
     }
