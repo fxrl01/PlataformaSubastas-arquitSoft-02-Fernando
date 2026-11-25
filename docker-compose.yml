@@ -1,11 +1,18 @@
+x-high-scale-ulimits: &high-scale-ulimits
+  nofile:
+    soft: 65535
+    hard: 65535
+
 x-api-env: &api-env
   PORT: 3000
   DATABASE_URL: postgres://${POSTGRES_USER:-livebid_admin}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}@livebid-pgbouncer:5432/livebid_db
   READ_DATABASE_URL: ${READ_DATABASE_URL:-}
-  DB_MAX_CONNS: ${DB_MAX_CONNS:-25}
-  DB_MIN_CONNS: ${DB_MIN_CONNS:-4}
+  DB_MAX_CONNS: ${DB_MAX_CONNS:-40}
+  DB_MIN_CONNS: ${DB_MIN_CONNS:-8}
   DB_PGBOUNCER_MODE: "true"
   REDIS_URL: redis://livebid-cache:6379
+  REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-128}
+  REDIS_MIN_IDLE_CONNS: ${REDIS_MIN_IDLE_CONNS:-16}
   AUCTION_CACHE_TTL_SEC: ${AUCTION_CACHE_TTL_SEC:-15}
   JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET in .env}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -41,11 +48,13 @@ services:
       retries: 5
     networks:
       - livebid-net
+    ulimits: *high-scale-ulimits
 
   livebid-pgbouncer:
     image: edoburu/pgbouncer:v1.23.1-p0
     container_name: livebid-pgbouncer
     restart: always
+    ulimits: *high-scale-ulimits
     environment:
       DB_HOST: livebid-db
       DB_PORT: 5432
@@ -53,8 +62,8 @@ services:
       DB_USER: ${POSTGRES_USER:-livebid_admin}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}
       POOL_MODE: transaction
-      MAX_CLIENT_CONN: 400
-      DEFAULT_POOL_SIZE: 30
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-2500}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-40}
       AUTH_TYPE: scram-sha-256
     depends_on:
       livebid-db:
@@ -71,7 +80,8 @@ services:
     image: redis:7-alpine
     container_name: livebid-redis
     restart: always
-    command: ["redis-server", "--appendonly", "yes"]
+    ulimits: *high-scale-ulimits
+    command: ["redis-server", "--appendonly", "yes", "--maxclients", "10000"]
     ports:
       - "6379:6379"
     volumes:
@@ -90,6 +100,7 @@ services:
       dockerfile: Dockerfile
     container_name: livebid-api-1
     restart: always
+    ulimits: *high-scale-ulimits
     environment:
       <<: *api-env
       INSTANCE_ID: livebid-api-1
@@ -112,6 +123,7 @@ services:
       dockerfile: Dockerfile
     container_name: livebid-api-2
     restart: always
+    ulimits: *high-scale-ulimits
     environment:
       <<: *api-env
       INSTANCE_ID: livebid-api-2
@@ -132,6 +144,7 @@ services:
     image: nginx:1.27-alpine
     container_name: livebid-nginx-gateway
     restart: always
+    ulimits: *high-scale-ulimits
     ports:
       - "${PORT:-3000}:80"
     volumes:

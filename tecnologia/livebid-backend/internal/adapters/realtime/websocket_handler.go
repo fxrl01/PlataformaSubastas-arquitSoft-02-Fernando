@@ -80,6 +80,13 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
+	conn.SetReadLimit(4096)
+	_ = conn.SetReadDeadline(time.Now().Add(75 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(75 * time.Second))
+		return nil
+	})
+
 	go func() {
 		for {
 			if _, _, err := conn.NextReader(); err != nil {
@@ -89,10 +96,19 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Keepalive cada 30s para evitar desconexión por idle timeout (100s) en Cloudflare WSS
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-pingTicker.C:
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		case payload, ok := <-messages:
 			if !ok {
 				return

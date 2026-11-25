@@ -27,7 +27,7 @@ import (
 func main() {
 	log.Println("=================================================================")
 	log.Println(" LIVEBID — REALTIME CORE ENGINE (Go 1.23+ Clean Architecture)")
-	log.Println(" Optimizado para AWS Free Tier (< 30 MB RAM, Latencia < 5ms)")
+	log.Println(" Optimizado para Microsoft Azure + Cloudflare Edge (2,000+ Usuarios, < 30 MB RAM)")
 	log.Println("=================================================================")
 
 	// 1. Conexión a PostgreSQL (Pool configurado + soporte Read Replica) y migración idempotente de esquema
@@ -70,8 +70,12 @@ func main() {
 		rCancel()
 	}
 
-	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub + Caché Distribuida)
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
+	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub + Caché Distribuida, Pool alta concurrencia)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:         redisAddr(os.Getenv("REDIS_URL")),
+		PoolSize:     envInt("REDIS_POOL_SIZE", 128),
+		MinIdleConns: envInt("REDIS_MIN_IDLE_CONNS", 16),
+	})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("ping redis: %v", err)
@@ -274,10 +278,12 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      withCORS(mux),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:              ":" + port,
+		Handler:           withCORS(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// 7. Reconciliación inicial y Scheduler de Cierre Automático

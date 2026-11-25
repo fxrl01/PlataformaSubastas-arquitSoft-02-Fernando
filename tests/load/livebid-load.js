@@ -5,10 +5,69 @@ import { Counter, Trend } from 'k6/metrics';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 const WS_BASE_URL = BASE_URL.replace(/^http/, 'ws');
+const PROFILE = (__ENV.PROFILE || 'ci').toLowerCase();
 
 const bidLatency = new Trend('livebid_bid_duration_ms');
 const serverErrors = new Counter('livebid_http_5xx_errors');
 const wsConnectionsOk = new Counter('livebid_ws_connected');
+
+// Perfiles de escala seleccionables con -e PROFILE=ci | scale2000 | stress5000
+const PROFILES = {
+  ci: {
+    label: 'CI Baseline (155 VUs)',
+    readStages: [
+      { duration: '5s', target: 50 },
+      { duration: '15s', target: 100 },
+      { duration: '5s', target: 0 },
+    ],
+    bidVUs: 15,
+    bidDuration: '15s',
+    wsStages: [
+      { duration: '5s', target: 40 },
+      { duration: '15s', target: 40 },
+      { duration: '3s', target: 0 },
+    ],
+    wsHoldMs: 3000,
+  },
+  scale2000: {
+    label: 'Escala Produccion Azure (2,100 VUs: 1,600 WS + 450 Catalogo + 50 Pujadores)',
+    readStages: [
+      { duration: '15s', target: 200 },
+      { duration: '30s', target: 450 },
+      { duration: '30s', target: 450 },
+      { duration: '10s', target: 0 },
+    ],
+    bidVUs: 50,
+    bidDuration: '60s',
+    wsStages: [
+      { duration: '20s', target: 800 },
+      { duration: '25s', target: 1600 },
+      { duration: '30s', target: 1600 },
+      { duration: '10s', target: 0 },
+    ],
+    wsHoldMs: 12000,
+  },
+  stress5000: {
+    label: 'Stress Futuro Crecimiento (5,000 VUs: 3,800 WS + 1,100 Catalogo + 100 Pujadores)',
+    readStages: [
+      { duration: '20s', target: 500 },
+      { duration: '40s', target: 1100 },
+      { duration: '40s', target: 1100 },
+      { duration: '15s', target: 0 },
+    ],
+    bidVUs: 100,
+    bidDuration: '80s',
+    wsStages: [
+      { duration: '30s', target: 1800 },
+      { duration: '40s', target: 3800 },
+      { duration: '30s', target: 3800 },
+      { duration: '15s', target: 0 },
+    ],
+    wsHoldMs: 15000,
+  },
+};
+
+const activeCfg = PROFILES[PROFILE] || PROFILES.ci;
 
 export const options = {
   scenarios: {
@@ -16,26 +75,23 @@ export const options = {
       executor: 'ramping-vus',
       exec: 'catalogReadFlow',
       startVUs: 10,
-      stages: [
-        { duration: '5s', target: 50 },
-        { duration: '15s', target: 100 },
-        { duration: '5s', target: 0 },
-      ],
-      gracefulRampDown: '2s',
+      stages: activeCfg.readStages,
+      gracefulRampDown: '3s',
     },
     bidding_spike: {
       executor: 'constant-vus',
       exec: 'concurrentBidFlow',
-      vus: 15,
-      duration: '15s',
+      vus: Number(__ENV.BID_VUS) || activeCfg.bidVUs,
+      duration: activeCfg.bidDuration,
       startTime: '5s',
     },
     ws_spectators: {
-      executor: 'constant-vus',
+      executor: 'ramping-vus',
       exec: 'websocketSpectatorFlow',
-      vus: 40,
-      duration: '15s',
-      startTime: '5s',
+      startVUs: 10,
+      stages: activeCfg.wsStages,
+      startTime: '3s',
+      gracefulRampDown: '3s',
     },
   },
   thresholds: {
@@ -215,7 +271,7 @@ export function websocketSpectatorFlow(data) {
     });
     socket.setTimeout(() => {
       socket.close();
-    }, 3000);
+    }, activeCfg.wsHoldMs);
   });
   check(res, {
     'WebSocket upgraded 101': (r) => r && r.status === 101,
@@ -263,7 +319,7 @@ export function handleSummary(data) {
 <body>
   <div class="wrap">
     <h1>LiveBid — Reporte Oficial de Pruebas de Carga (k6)</h1>
-    <p class="sub">Entorno: Nginx Load Balancer &rarr; 2 Réplicas Go (livebid-api-1 / livebid-api-2) &rarr; PgBouncer + PostgreSQL 16 + Redis 7</p>
+    <p class="sub">Perfil: <strong>${activeCfg.label}</strong> &bull; Entorno: Cloudflare Edge / Nginx LB &rarr; 2 Réplicas Go &rarr; PgBouncer + PostgreSQL 16 + Redis 7</p>
     <div class="grid">
       <div class="card"><div class="label">Total Peticiones HTTP</div><div class="val">${metricVal(data, 'http_reqs', 'count')}</div></div>
       <div class="card"><div class="label">Throughput (req/s)</div><div class="val">${metricVal(data, 'http_reqs', 'rate')}</div></div>
