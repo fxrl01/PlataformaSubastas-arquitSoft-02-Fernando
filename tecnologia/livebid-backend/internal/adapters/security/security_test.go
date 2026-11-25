@@ -6,10 +6,16 @@ import (
 
 	"github.com/fxrl01/livebid-backend/internal/adapters/security"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func TestBcryptHasherHashesAndVerifiesPasswords(t *testing.T) {
+	// cost < MinCost falls back to DefaultCost
+	defaultHasher := security.NewBcryptHasher(0)
+	if defaultHasher == nil {
+		t.Fatal("expected non-nil default hasher")
+	}
 	hasher := security.NewBcryptHasher(bcrypt.MinCost)
 
 	hash, err := hasher.Hash("ClaveSeguraLiveBid2026!")
@@ -70,5 +76,22 @@ func TestJWTIssuerIssuesAndVerifiesRoleClaims(t *testing.T) {
 	otherIssuer, _ := security.NewJWTIssuer("different-secret-key")
 	if _, err := otherIssuer.Verify(token); err == nil {
 		t.Fatal("expected token signed with different secret to be rejected")
+	}
+
+	// Malformed / wrong algorithm / missing claims tokens must be rejected
+	if _, err := issuer.Verify("not-a-jwt"); err == nil {
+		t.Fatal("expected malformed JWT to be rejected")
+	}
+	noneToken, _ := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{"sub": "u1", "role": "POSTOR"}).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if _, err := issuer.Verify(noneToken); err == nil {
+		t.Fatal("expected alg=none JWT to be rejected")
+	}
+	missingSub, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"role": "POSTOR", "exp": time.Now().Add(time.Minute).Unix()}).SignedString([]byte("super-secret-jwt-key-livebid-2026"))
+	if _, err := issuer.Verify(missingSub); err == nil {
+		t.Fatal("expected JWT without sub to be rejected")
+	}
+	missingRole, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": "u1", "exp": time.Now().Add(time.Minute).Unix()}).SignedString([]byte("super-secret-jwt-key-livebid-2026"))
+	if _, err := issuer.Verify(missingRole); err == nil {
+		t.Fatal("expected JWT without role to be rejected")
 	}
 }

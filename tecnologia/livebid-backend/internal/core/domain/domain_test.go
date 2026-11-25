@@ -161,6 +161,21 @@ func TestUserValidationRolesStatusesAndAuctionHelpers(t *testing.T) {
 	if err := mandate.CanAuthorizeBid(1000, now.Add(2*time.Hour)); err != domain.ErrAgentMandateExpired {
 		t.Fatalf("expected ErrAgentMandateExpired, got %v", err)
 	}
+	if err := sub.Cerrar(); err != nil {
+		t.Fatalf("unexpected Cerrar error: %v", err)
+	}
+	if err := sub.Activar(); err == nil {
+		t.Fatal("expected error activating closed auction")
+	}
+	if err := sub.IniciarConteo(); err == nil {
+		t.Fatal("expected error starting countdown on closed auction")
+	}
+	if err := sub.Cerrar(); err == nil {
+		t.Fatal("expected error closing already closed auction")
+	}
+	if _, _, err := sub.ValidarYRegistrarPuja("p3", "b3", 2000, now.Add(3*time.Minute)); err != domain.ErrSubastaCerrada {
+		t.Fatalf("expected ErrSubastaCerrada on closed auction, got %v", err)
+	}
 	if domain.RequiredGuaranteeWithRatio(1000, 0) != 100 || domain.RequiredGuaranteeWithRatio(1000, 0.2) != 200 {
 		t.Fatal("unexpected guarantee ratio calculation")
 	}

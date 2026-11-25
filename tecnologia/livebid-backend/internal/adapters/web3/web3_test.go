@@ -91,5 +91,35 @@ func TestEVMEscrowAdapterLocksCollateralAndAnchorsMerkleRoot(t *testing.T) {
 	if receipt.MerkleRoot != root || len(receipt.TxHash) != 66 || receipt.ChainID != 8453 {
 		t.Fatalf("unexpected on-chain settlement receipt: %+v", receipt)
 	}
+
+	// Default chain/contract fallbacks, invalid inputs and canceled contexts
+	defaultVerifier := web3.NewEIP712Verifier(0, "bad-contract")
+	defaultEscrow := web3.NewEVMEscrowAdapter(0, "bad-contract", "")
+	if digest := defaultVerifier.ComputeTypedDataDigest(domain.EIP712BidEnvelope{AuctionID: "a", BidderID: "b", WalletAddress: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"}); digest == "" {
+		t.Fatal("expected non-empty digest with default chain")
+	}
+	if err := defaultVerifier.VerifyBidSignature(context.Background(), domain.EIP712BidEnvelope{WalletAddress: "invalid"}, time.Now()); err != domain.ErrInvalidWeb3Wallet {
+		t.Fatalf("expected ErrInvalidWeb3Wallet, got %v", err)
+	}
+	if err := defaultVerifier.VerifyBidSignature(context.Background(), domain.EIP712BidEnvelope{WalletAddress: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", Signature: "no-prefix"}, time.Now()); err != domain.ErrInvalidWeb3Signature {
+		t.Fatalf("expected ErrInvalidWeb3Signature, got %v", err)
+	}
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := defaultVerifier.VerifyBidSignature(canceledCtx, domain.EIP712BidEnvelope{}, time.Now()); err == nil {
+		t.Fatal("expected context error in VerifyBidSignature")
+	}
+	if _, err := defaultEscrow.LockCollateralOnChain(canceledCtx, "a", "b", "", 100); err == nil {
+		t.Fatal("expected context error in LockCollateralOnChain")
+	}
+	if _, err := defaultEscrow.LockCollateralOnChain(context.Background(), "a", "b", "invalid-wallet", 100); err != domain.ErrInvalidWeb3Wallet {
+		t.Fatalf("expected ErrInvalidWeb3Wallet in LockCollateralOnChain, got %v", err)
+	}
+	if _, err := defaultEscrow.SettleEscrowAndAnchorMerkleRoot(canceledCtx, "a", "b", 100, ""); err == nil {
+		t.Fatal("expected context error in SettleEscrowAndAnchorMerkleRoot")
+	}
+	if emptyReceipt, err := defaultEscrow.SettleEscrowAndAnchorMerkleRoot(context.Background(), "a", "b", 100, ""); err != nil || emptyReceipt.MerkleRoot == "" {
+		t.Fatalf("expected empty root fallback in SettleEscrowAndAnchorMerkleRoot, got %+v err=%v", emptyReceipt, err)
+	}
 }
 

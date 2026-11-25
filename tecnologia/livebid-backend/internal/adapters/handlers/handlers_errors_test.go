@@ -148,4 +148,44 @@ func TestHandlersErrorBranchesAndValidation(t *testing.T) {
 	if unauthRec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from RequireRoles without user, got %d", unauthRec.Code)
 	}
+
+	// Handler nil-dependency / unconfigured branches + Web3 headers en BidHandler + AuditWeb3 nil
+	nilAuditH := handlers.NewAuctionHandler(nil)
+	recAuditNil := httptest.NewRecorder()
+	nilAuditH.AuditWeb3(recAuditNil, httptest.NewRequest(http.MethodGet, "/api/v1/subastas/1/auditoria-web3", nil))
+	if recAuditNil.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 when web3Audit is nil, got %d", recAuditNil.Code)
+	}
+
+	nilAIH := handlers.NewAgentAIHandler(nil, nil, nil, nil)
+	recRepNil := httptest.NewRecorder()
+	nilAIH.IntelligenceReport(recRepNil, httptest.NewRequest(http.MethodGet, "/api/v1/subastas/1/inteligencia-ia", nil))
+	if recRepNil.Code != http.StatusOK {
+		t.Fatalf("expected 200 empty intelligence report when deps nil, got %d", recRepNil.Code)
+	}
+	recSwitchNil := doJSONReq(t, http.HandlerFunc(nilAIH.SwitchModel), http.MethodPatch, "/api/v1/admin/ia/modelo", "", map[string]string{"modelo": "x"})
+	if recSwitchNil.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 when ai router is nil, got %d", recSwitchNil.Code)
+	}
+
+	// BidHandler con headers X-Web3-* inválidos
+	web3BidReq := httptest.NewRequest(http.MethodPost, "/api/v1/subastas/"+aID+"/pujas", bytes.NewBufferString(`{"monto":1500}`))
+	web3BidReq.Header.Set("Authorization", "Bearer "+adminAuth.AccessToken)
+	web3BidReq.Header.Set("X-Web3-Wallet", "bad-wallet")
+	web3BidReq.Header.Set("X-Web3-Signature", "0x1234")
+	web3BidReq.Header.Set("X-Web3-Nonce", "n1")
+	web3BidReq.Header.Set("X-Web3-Deadline", "9999999999")
+	web3BidReq.Header.Set("X-AI-Agent-Mandate", "mnd_1")
+	web3BidRec := httptest.NewRecorder()
+	mux.ServeHTTP(web3BidRec, web3BidReq)
+	if web3BidRec.Code == http.StatusCreated {
+		t.Fatal("expected rejected bid with missing guarantee/mandate")
+	}
+
+	// AuthHandler.Me sin usuario en contexto -> 401
+	meRec := httptest.NewRecorder()
+	handlers.NewAuthHandler(nil).Me(meRec, httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil))
+	if meRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on Me without user context, got %d", meRec.Code)
+	}
 }

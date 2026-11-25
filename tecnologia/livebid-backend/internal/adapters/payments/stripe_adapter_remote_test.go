@@ -70,4 +70,41 @@ func TestStripeAdapterRemoteHTTPFlow(t *testing.T) {
 	if !strings.HasPrefix(intent.ClientSecret, "pi_remote_999_secret_") {
 		t.Fatalf("unexpected client secret: %s", intent.ClientSecret)
 	}
+
+	// Error & fallback branches
+	defaultAdapter := payments.NewStripeAdapter("replace-me", "replace-me", "whsec_live_1")
+	if _, err := defaultAdapter.CreateManualHoldIntent(context.Background(), "sub-d", "bid-d", 100, ""); err != nil {
+		t.Fatalf("expected default currency sandbox intent to succeed, got %v", err)
+	}
+	if _, err := defaultAdapter.VerifyHoldIntent(context.Background(), "bad"); err != domain.ErrStripeHoldFailed {
+		t.Fatalf("expected ErrStripeHoldFailed for bad pi_ id, got %v", err)
+	}
+	if err := defaultAdapter.CaptureHoldIntent(context.Background(), ""); err != domain.ErrGuaranteeInvalid {
+		t.Fatalf("expected ErrGuaranteeInvalid on empty capture id, got %v", err)
+	}
+	if err := defaultAdapter.CancelHoldIntent(context.Background(), ""); err != domain.ErrGuaranteeInvalid {
+		t.Fatalf("expected ErrGuaranteeInvalid on empty cancel id, got %v", err)
+	}
+	if err := defaultAdapter.VerifyWebhookSignature([]byte(`{"type":"ping"}`), "invalid_format"); err != domain.ErrStripeWebhookInvalid {
+		t.Fatalf("expected ErrStripeWebhookInvalid on malformed signature header, got %v", err)
+	}
+
+	errSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"upstream"}`))
+	}))
+	defer errSrv.Close()
+	errAdapter := payments.NewStripeAdapter("sk_test_remote_key", "", "").WithBaseURL(errSrv.URL + "/v1")
+	if _, err := errAdapter.CreateManualHoldIntent(context.Background(), "s1", "b1", 100, "usd"); err == nil {
+		t.Fatal("expected error from 502 remote stripe create")
+	}
+	if _, err := errAdapter.VerifyHoldIntent(context.Background(), "pi_remote_502"); err != domain.ErrStripeHoldFailed {
+		t.Fatalf("expected ErrStripeHoldFailed on 502 verify, got %v", err)
+	}
+	if err := errAdapter.CaptureHoldIntent(context.Background(), "pi_remote_502"); err != domain.ErrStripeHoldFailed {
+		t.Fatalf("expected ErrStripeHoldFailed on 502 capture, got %v", err)
+	}
+	if err := errAdapter.VerifyWebhookSignature([]byte(`{"type":"ping"}`), ""); err != domain.ErrStripeWebhookInvalid {
+		t.Fatalf("expected ErrStripeWebhookInvalid on empty header in dev mode, got %v", err)
+	}
 }

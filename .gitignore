@@ -35,3 +35,6 @@ Plan_implement.md
 tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/blob-report/
+
+# Reportes de cobertura Jest
+tecnologia/boilerplate-clean-arquitecture/coverage/

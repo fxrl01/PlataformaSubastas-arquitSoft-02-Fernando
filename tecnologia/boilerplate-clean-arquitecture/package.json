@@ -9,9 +9,22 @@
     "test:bids": "node --experimental-strip-types src/app/pruebas/subasta.pruebas.ts",
     "test:escrow": "node --experimental-strip-types src/app/pruebas/garantia-ia.pruebas.ts",
     "test:server": "NODE_ENV=test node --experimental-strip-types src/app/pruebas/servidor-integracion.pruebas.ts",
-    "test": "node --experimental-strip-types src/app/pruebas/subasta.pruebas.ts && node --experimental-strip-types src/app/pruebas/garantia-ia.pruebas.ts && NODE_ENV=test node --experimental-strip-types src/app/pruebas/servidor-integracion.pruebas.ts"
+    "test:jest": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
-  "keywords": ["clean-architecture", "subastas", "livebid", "typescript"],
+  "keywords": [
+    "clean-architecture",
+    "subastas",
+    "livebid",
+    "typescript"
+  ],
   "author": "Fernando Olivares Chuhui",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.15",
+    "typescript": "^5.9.3"
+  }
 }

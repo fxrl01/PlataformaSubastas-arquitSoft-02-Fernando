@@ -61,7 +61,23 @@ func TestWebSocketHandlerRejectsUnauthorizedAndUpgradesValidConnection(t *testin
 		t.Fatalf("expected 401 without token, got %d", rec.Code)
 	}
 
-	// 2. Subasta inexistente -> 404
+	// 2. Subasta inexistente -> 404; token inválido -> 401; usuario no encontrado -> 401; Origin cruzado -> 403
+	reqBadTok := httptest.NewRequest(http.MethodGet, "/ws/subastas/sub-ws-1?token=bad.jwt.tok", nil)
+	recBadTok := httptest.NewRecorder()
+	mux.ServeHTTP(recBadTok, reqBadTok)
+	if recBadTok.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad token, got %d", recBadTok.Code)
+	}
+
+	unknownTok, _ := issuer.Issue(domain.TokenClaims{UserID: "ghost", Role: domain.RoleBidder}, now.Add(time.Minute))
+	reqGhost := httptest.NewRequest(http.MethodGet, "/ws/subastas/sub-ws-1", nil)
+	reqGhost.Header.Set("Authorization", "Bearer "+unknownTok)
+	recGhost := httptest.NewRecorder()
+	mux.ServeHTTP(recGhost, reqGhost)
+	if recGhost.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unknown user, got %d", recGhost.Code)
+	}
+
 	req404 := httptest.NewRequest(http.MethodGet, "/ws/subastas/unknown?token="+token, nil)
 	rec404 := httptest.NewRecorder()
 	mux.ServeHTTP(rec404, req404)
@@ -104,6 +120,21 @@ func TestWebSocketHandlerRejectsUnauthorizedAndUpgradesValidConnection(t *testin
 		_, msg, err := c.ReadMessage()
 		if err != nil || !strings.Contains(string(msg), "b-ws-1") {
 			t.Fatalf("expected live ws bid payload, got msg=%q err=%v", string(msg), err)
+		}
+
+		// BroadcastSubastaCerrada con y sin ganador
+		_ = notifier.BroadcastSubastaCerrada(context.Background(), "sub-ws-1", nil)
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, closedMsg, err := c.ReadMessage()
+		if err != nil || !strings.Contains(string(closedMsg), "auction.closed") {
+			t.Fatalf("expected auction.closed payload, got msg=%q err=%v", string(closedMsg), err)
+		}
+		winner := domain.NuevaPuja("b-ws-win", "sub-ws-1", user.ID, 1500, now)
+		_ = notifier.BroadcastSubastaCerrada(context.Background(), "sub-ws-1", &winner)
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, closedWinMsg, err := c.ReadMessage()
+		if err != nil || !strings.Contains(string(closedWinMsg), user.ID) {
+			t.Fatalf("expected winner in auction.closed payload, got msg=%q err=%v", string(closedWinMsg), err)
 		}
 	}
 }

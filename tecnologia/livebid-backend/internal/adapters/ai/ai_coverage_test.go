@@ -2,12 +2,22 @@ package ai_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/fxrl01/livebid-backend/internal/adapters/ai"
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 )
+
+type failingEvaluator struct{}
+
+func (failingEvaluator) EvaluarRiesgo(context.Context, string, string, float64) (domain.NivelRiesgo, error) {
+	return domain.RiesgoMedio, errors.New("ai down")
+}
+func (failingEvaluator) EvaluarPostor(context.Context, string, string) (domain.EvaluacionRiesgo, error) {
+	return domain.EvaluacionRiesgo{}, errors.New("ai down")
+}
 
 func TestMultiModelRouterAndGeminiEvaluarRiesgoPaths(t *testing.T) {
 	gemini := ai.NewGeminiRiskAdapter("")
@@ -21,6 +31,22 @@ func TestMultiModelRouterAndGeminiEvaluarRiesgoPaths(t *testing.T) {
 	breaker := ai.NewCircuitBreakerIA(gemini, 2, time.Second, 150*time.Millisecond)
 	if riesgo, err := breaker.EvaluarRiesgo(context.Background(), "USR-VIP-01", "sub-1", 1000); err != nil || riesgo != domain.RiesgoBajo {
 		t.Fatalf("breaker EvaluarRiesgo failed: %v err=%v", riesgo, err)
+	}
+	defaultBreaker := ai.NewCircuitBreakerIA(failingEvaluator{}, 0, 0, 0)
+	if riesgo, err := defaultBreaker.EvaluarRiesgo(context.Background(), "u1", "s1", 100); err != nil || riesgo != domain.RiesgoMedio {
+		t.Fatalf("expected fallback RiesgoMedio on failing provider, got %v err=%v", riesgo, err)
+	}
+
+	// Defaults & empty model registration + flagged bidder invalidation
+	defaultRouter := ai.NewMultiModelRouter("", nil, 0)
+	if eval, err := defaultRouter.EvaluarPostor(context.Background(), "u1", "s1"); err != nil || !eval.ModoFallback {
+		t.Fatalf("expected fallback when no evaluator registered, got %+v err=%v", eval, err)
+	}
+	defaultRouter.RegisterModel("", nil)
+	defaultRouter.RegisterModel("failing", failingEvaluator{})
+	_ = defaultRouter.SetActiveModel("failing")
+	if eval, err := defaultRouter.EvaluarPostor(context.Background(), "u1", "s1"); err != nil || !eval.ModoFallback {
+		t.Fatalf("expected fallback when router evaluator fails, got %+v err=%v", eval, err)
 	}
 
 	router := ai.NewMultiModelRouter("gemini-2.5-flash", breaker, time.Minute)
@@ -38,6 +64,15 @@ func TestMultiModelRouterAndGeminiEvaluarRiesgoPaths(t *testing.T) {
 	}
 	if eval, err := router.EvaluarPostor(context.Background(), "USR-VIP-01", "sub-1"); err != nil || eval.Score == 0 {
 		t.Fatalf("router EvaluarPostor failed: %+v err=%v", eval, err)
+	}
+	// Cache hit
+	if eval, err := router.EvaluarPostor(context.Background(), "USR-VIP-01", "sub-1"); err != nil || eval.Score == 0 {
+		t.Fatalf("router cached EvaluarPostor failed: %+v err=%v", eval, err)
+	}
+	// Flagged bidder bypasses cache and marks RiesgoAlto
+	router.FlagSuspiciousBidder("USR-VIP-01", "Ping-pong")
+	if eval, err := router.EvaluarPostor(context.Background(), "USR-VIP-01", "sub-1"); err != nil || eval.Nivel != domain.RiesgoAlto {
+		t.Fatalf("expected RiesgoAlto for flagged bidder, got %+v err=%v", eval, err)
 	}
 
 	detector := ai.NewAsyncFraudDetector(router)
