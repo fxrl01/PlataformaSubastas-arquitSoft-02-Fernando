@@ -33,7 +33,7 @@ graph TD
     EVMChain["⛓️ Red Blockchain EVM & Smart Contract Escrow<br><i>[Sistema Externo Web3]</i><br>Verificación de colateral on-chain, firmas EIP-712 y anclaje de MerkleRoot al cierre"]:::web3
     Pasarela["💳 Pasarela Bancaria (Stripe / Niubiz)<br><i>[Sistema Externo]</i><br>Retención y captura de garantías fiduciarias"]:::external
     KYC["🆔 Servicio de Identidad (RENIEC / KYC)<br><i>[Sistema Externo]</i><br>Validación de identidad legal para activación de cuentas"]:::external
-    VideoLive["🎥 Proveedor de Video Streaming (Cloudflare / AWS IVS)<br><i>[Sistema Externo]</i><br>Transmisión de video en vivo del martillero con baja latencia"]:::external
+    VideoLive["🎥 Proveedor de Video Streaming (Cloudflare Stream / Azure CDN)<br><i>[Sistema Externo]</i><br>Transmisión de video en vivo del martillero con baja latencia"]:::external
 
     Pujador -->|"Puja en vivo (WS/REST), delega Agente IA y audita Merkle"| LiveBid
     Martillero -->|"Registra credenciales de encargado, inicia conteo y cierra"| LiveBid
