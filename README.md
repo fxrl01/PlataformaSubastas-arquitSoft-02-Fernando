@@ -44,11 +44,15 @@ PlataformaSubastas-arquitSoft-02-Fernando/
 │   │       ├── diseño-interno-de-modulos.md
 │   │       ├── patrones-de-diseño.md
 │   │       └── principios-de-diseño.md
-│   └── 04-modelo-c4/                       # Niveles 1 al 4 de Simon Brown
-│       ├── Nivel1-DiagramadeContextodelSistema.md
-│       ├── Nivel2-DiagramadeContenedores.md
-│       ├── Nivel3-Diagrama-de-Componentes.md
-│       └── Nivel4-DiagramadeCodigo.md
+│   ├── 04-modelo-c4/                       # Niveles 1 al 4 de Simon Brown
+│   │   ├── Nivel1-DiagramadeContextodelSistema.md
+│   │   ├── Nivel2-DiagramadeContenedores.md
+│   │   ├── Nivel3-Diagrama-de-Componentes.md
+│   │   └── Nivel4-DiagramadeCodigo.md
+│   ├── 05-api-openapi/                     # Guía e integración OpenAPI 3.0.3 / Swagger UI
+│   │   └── documentacion-openapi-swagger.md
+│   └── 06-validacion-atributos-calidad/    # Evidencias cuantitativas AC01-AC08, RNF y SEI
+│       └── evidencias-validacion-atributos-calidad.md
 ├── tecnologia/
 │   ├── livebid-backend/                    # Backend Principal en Go 1.23+ (Clean/Hexagonal Architecture)
 │   │   ├── cmd/server/main.go              # Punto de entrada, DI, rutas HTTP/WS y Scheduler

@@ -18,6 +18,16 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     expect(cssRes.ok()).toBeTruthy();
     expect(cssRes.headers()['cache-control']).toContain('max-age=3600');
     expect(cssRes.headers()['x-static-layer']).toBe('nginx-frontend-cache');
+
+    const swaggerRes = await request.get('/swagger');
+    expect(swaggerRes.ok()).toBeTruthy();
+    expect(swaggerRes.headers()['content-type']).toContain('text/html');
+    expect(await swaggerRes.text()).toContain('SwaggerUIBundle');
+
+    const openApiRes = await request.get('/api/v1/openapi.json');
+    expect(openApiRes.ok()).toBeTruthy();
+    const openApiSpec = await openApiRes.json();
+    expect(openApiSpec.openapi).toBe('3.0.3');
   });
 
   test('Flujo E2E completo con 2 navegadores: Registro -> KYC Admin -> Nueva Subasta -> Stripe Hold -> Puja WS -> Cierre y Merkle', async ({ browser, request }) => {
