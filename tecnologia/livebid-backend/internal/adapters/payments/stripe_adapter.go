@@ -35,7 +35,7 @@ type StripeAdapter struct {
 
 func NewStripeAdapter(secretKey, publishableKey, webhookSecret string) *StripeAdapter {
 	pub := strings.TrimSpace(publishableKey)
-	if pub == "" || strings.HasPrefix(pub, "replace-") {
+	if pub == "" || strings.HasPrefix(pub, "replace-") || strings.Contains(pub, "replace_with") {
 		pub = "pk_test_livebid_pci_dss_public_key"
 	}
 	return &StripeAdapter{
@@ -57,7 +57,7 @@ func (a *StripeAdapter) WithBaseURL(baseURL string) *StripeAdapter {
 }
 
 func (a *StripeAdapter) isRealStripeConfigured() bool {
-	if a.secretKey == "" || strings.HasPrefix(a.secretKey, "replace-") {
+	if a.secretKey == "" || strings.HasPrefix(a.secretKey, "replace-") || strings.Contains(a.secretKey, "replace_with") {
 		return false
 	}
 	return strings.HasPrefix(a.secretKey, "sk_test_") || strings.HasPrefix(a.secretKey, "sk_live_")

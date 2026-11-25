@@ -1,16 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AUREUM &amp; CO. — LiveBid Private Auction Salon | Subastas en Tiempo Real</title>
-  <meta name="description" content="LiveBid — Plataforma de Subastas en Tiempo Real con Gestión RBAC, Encargado Oficial, Ficha Pericial e Integración Clean Architecture.">
-  
+  <meta name="description"
+    content="LiveBid — Plataforma de Subastas en Tiempo Real con Gestión RBAC, Encargado Oficial, Ficha Pericial e Integración Clean Architecture.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
+
 <body class="luxury-salon-theme">
 
   <!-- FONDO CINEMATOGRÁFICO CON LUZ CENITAL Y AURA DORADA -->
@@ -23,7 +28,7 @@
   <header class="top-nav">
     <div class="nav-left">
       <div class="brand">
-        <div class="brand-emblem">⚜️</div>
+        <div class="brand-emblem"></div>
         <div class="brand-titles">
           <span class="brand-name">AUREUM <span class="brand-gold">&amp;</span> CO.</span>
           <span class="brand-sub">LIVEBID REALTIME AUCTION PLATFORM • POSTGRESQL ACID</span>
@@ -47,17 +52,25 @@
     <div class="nav-right">
       <!-- Botones de Módulos (Visibilidad estricta según Rol RBAC autenticado) -->
       <div class="module-nav-actions">
-        <button type="button" class="btn-nav-module hidden" id="btnOpenLotModal" title="Subir Imagen Referencial, Detalles del Lote y Encargado">
+        <button type="button" class="btn-nav-module hidden" id="btnOpenLotModal"
+          title="Subir Imagen Referencial, Detalles del Lote y Encargado">
           <span>📷</span> Subir Lote / Encargado
         </button>
-        <button type="button" class="btn-nav-module admin-only-btn hidden" id="btnOpenAdminModal" title="Panel de Administración de Usuarios, Roles y KYC">
-          <span>🛡️</span> Panel Admin (<span id="adminRoleIndicator">RBAC</span>)
+        <button type="button" class="btn-nav-module admin-only-btn hidden" id="btnOpenAdminModal"
+          title="Panel de Administración de Usuarios, Roles y KYC">
+          <span></span> Panel Admin (<span id="adminRoleIndicator">RBAC</span>)
         </button>
-        <button type="button" class="btn-nav-module" id="btnOpenStripeNav" title="Pre-autorizar Garantía Bancaria con Stripe (Hold)">
-          <span>💳</span> Garantía Stripe
+        <button type="button" class="btn-nav-module" id="btnOpenStripeNav"
+          title="Pre-autorizar Garantía Bancaria con Stripe (Hold)">
+          <span></span> Garantía Stripe
         </button>
-        <button type="button" class="btn-nav-module highlight-auth" id="btnOpenAuthModal" title="Iniciar Sesión o Registrarse con Solicitud de Rol">
-          <span>🔐</span> <span id="authBtnLabel">Iniciar Sesión / Registro</span>
+        <a href="/swagger" target="_blank" rel="noopener noreferrer" class="btn-nav-module" id="btnOpenSwaggerDocs"
+          style="text-decoration: none;" title="Documentación interactiva OpenAPI 3.0 / Swagger UI">
+          <span></span> API Docs
+        </a>
+        <button type="button" class="btn-nav-module highlight-auth" id="btnOpenAuthModal"
+          title="Iniciar Sesión o Registrarse con Solicitud de Rol">
+          <span></span> <span id="authBtnLabel">Iniciar Sesión / Registro</span>
         </button>
       </div>
 
@@ -66,14 +79,14 @@
       <div class="user-badge" id="userProfileBadge" title="Click para gestionar sesión">
         <div class="user-avatar">
           <span id="userInitials">FO</span>
-          <div class="vip-crown">👑</div>
+          <div class="vip-crown"></div>
         </div>
         <div class="user-info">
           <div class="user-header-line">
             <span class="user-name" id="navUserName">Fernando Olivares</span>
             <span class="tier-pill" id="navUserRoleBadge">POSTOR</span>
           </div>
-          <span class="user-escrow" id="escrowBadge">🛡️ Garantía: S/. 5,000 (Activa)</span>
+          <span class="user-escrow" id="escrowBadge"> Garantía: S/. 5,000 (Activa)</span>
         </div>
       </div>
     </div>
@@ -107,16 +120,16 @@
 
             <!-- Ícono de Respaldo cuando aún no se ha subido foto -->
             <div class="asset-icon-stage" id="defaultLotIconStage">
-              <div class="car-silhouette">🚙</div>
+              <div class="car-silhouette"></div>
               <div class="stage-glow"></div>
             </div>
 
             <button type="button" class="btn-upload-overlay hidden" id="btnQuickUploadImage">
-              📷 Subir / Cambiar Imagen Referencial
+              Subir / Cambiar Imagen Referencial
             </button>
 
             <div class="media-overlay">
-              <span class="camera-icon">🎥</span>
+              <span class="camera-icon"></span>
               <span id="lotCertLinkWrap">TRANSMISIÓN Y PERITAJE OFICIAL EN SALA</span>
             </div>
           </div>
@@ -127,7 +140,8 @@
         <div class="lot-number-tag" id="lotIdTag">LOTE OFICIAL #SUB-2026-001</div>
         <h1 class="item-title" id="lotTitle">Toyota Hilux GR-Sport 2022 4x4 • Heritage Edition</h1>
         <p class="item-desc" id="lotDescription">
-          Ejemplar corporativo exclusivo en condición de exhibición. Incluye inspección mecánica certificada y custodia de títulos lista para adjudicación inmediata.
+          Ejemplar corporativo exclusivo en condición de exhibición. Incluye inspección mecánica certificada y custodia
+          de títulos lista para adjudicación inmediata.
         </p>
 
         <!-- ESPECIFICACIONES TÉCNICAS DINÁMICAS DEL LOTE -->
@@ -162,7 +176,7 @@
               <span id="encargadoCargo">Martillero Público Oficial SUNARP</span> •
               <strong id="encargadoLicencia">Lic. REG-SUNARP-2026-0412</strong>
             </div>
-            <div class="encargado-contact" id="encargadoContacto">📧 cmendoza@livebid.pe | +51 998 112 334</div>
+            <div class="encargado-contact" id="encargadoContacto"> cmendoza@livebid.pe | +51 998 112 334</div>
             <p class="encargado-exp" id="encargadoExperiencia">
               14 años dirigiendo remates judiciales, vehiculares y liquidaciones corporativas.
             </p>
@@ -179,17 +193,17 @@
       <div class="frame-corner top-right"></div>
       <div class="frame-corner bottom-left"></div>
       <div class="frame-corner bottom-right"></div>
-      
+
       <!-- CRONÓMETRO REGRESIVO Y MARTILLAZO SOBERANO -->
       <div class="timer-section">
         <div class="timer-header">
           <div class="timer-title-box">
-            <span class="timer-icon">⏳</span>
+            <span class="timer-icon"></span>
             <span class="timer-title">TIEMPO PARA EL MARTILLAZO DE SALA</span>
           </div>
           <span class="phase-tag" id="auctionPhaseTag">ESTRADO ABIERTO • PUJAS EN VIVO</span>
         </div>
-        
+
         <div class="countdown-display" id="countdownDisplay">
           <div class="time-block">
             <span class="time-number" id="minutes">01</span>
@@ -204,10 +218,11 @@
 
         <!-- ALERTA DE ANTI-SNIPING -->
         <div class="anti-sniping-banner hidden" id="antiSnipingBanner">
-          <span class="alert-icon">⚡</span>
+          <span class="alert-icon"></span>
           <div class="alert-content">
             <strong>¡REGLA ANTI-SNIPING ACTIVADA!</strong>
-            <span>Oferta en últimos 15 segundos detectada: Se ha añadido <strong>+30 segundos</strong> de extensión automática para garantizar una puja justa.</span>
+            <span>Oferta en últimos 15 segundos detectada: Se ha añadido <strong>+30 segundos</strong> de extensión
+              automática para garantizar una puja justa.</span>
           </div>
         </div>
       </div>
@@ -219,7 +234,7 @@
           <span class="price-title">OFERTA MÁXIMA EN SALA</span>
           <span class="ornament-line right"></span>
         </div>
-        
+
         <div class="current-price" id="currentPriceDisplay">
           <span class="currency">S/.</span>
           <span class="amount" id="currentPriceValue">45,000</span>
@@ -253,7 +268,8 @@
         <!-- GRUPO DE ENTRADA Y BOTÓN MAESTRO DE REMATE -->
         <div class="input-bid-group">
           <span class="currency-prefix">S/.</span>
-          <input type="number" id="bidInput" class="bid-input" value="46000" min="46000" step="1000" aria-label="Monto de oferta">
+          <input type="number" id="bidInput" class="bid-input" value="46000" min="46000" step="1000"
+            aria-label="Monto de oferta">
           <button type="button" class="btn btn-action-bid" id="btnEmitirPuja">
             <span class="btn-shine"></span>
             <span class="btn-text">¡EMITIR OFERTA EN SALA!</span>
@@ -262,9 +278,10 @@
         </div>
 
         <div class="zero-trust-guarantee">
-          <span class="shield-icon">🏛️</span>
-          <span id="guaranteeStatusNote"><strong>Respaldo de Custodia (Stripe Hold):</strong> Toda oferta requiere garantía activa retenida (`capture_method: manual`) y cuenta con estado <strong>ACTIVO</strong>.</span>
-          <button type="button" class="btn-pill-quick" id="btnOpenStripeModal">💳 Autorizar Garantía Stripe</button>
+          <span class="shield-icon"></span>
+          <span id="guaranteeStatusNote"><strong>Respaldo de Custodia (Stripe Hold):</strong> Toda oferta requiere
+            garantía activa retenida (`capture_method: manual`) y cuenta con estado <strong>ACTIVO</strong>.</span>
+          <button type="button" class="btn-pill-quick" id="btnOpenStripeModal"> Autorizar Garantía Stripe</button>
         </div>
 
         <!-- TOAST DE FEEDBACK DE ERROR O ÉXITO -->
@@ -281,12 +298,12 @@
       <div class="frame-corner top-right"></div>
       <div class="frame-corner bottom-left"></div>
       <div class="frame-corner bottom-right"></div>
-      
+
       <!-- WIDGET DE EVALUACIÓN DE CONFIANZA IA -->
       <div class="ai-widget">
         <div class="widget-header">
           <div class="ai-title">
-            <span class="sparkle-icon">✨</span>
+            <span class="sparkle-icon"></span>
             <div class="ai-title-text">
               <span class="ai-main">Copiloto de Riesgo IA</span>
               <span class="ai-sub">GOOGLE GEMINI • CIRCUIT BREAKER</span>
@@ -304,14 +321,15 @@
             <div class="meter-fill" id="aiMeterFill" style="width: 92%;"></div>
           </div>
           <p class="ai-justification" id="aiJustificationText">
-            ✓ Postor con KYC acreditado y calificación solvente. Garantía asignada: <strong>10% del precio base</strong>.
+            ✓ Postor con KYC acreditado y calificación solvente. Garantía asignada: <strong>10% del precio
+              base</strong>.
           </p>
         </div>
 
         <div class="circuit-demo-bar">
           <span class="demo-label">Resiliencia IA:</span>
           <button type="button" class="btn btn-sm btn-secondary" id="btnToggleGemini">
-            <span class="btn-icon">⚡</span> Simular Fallback Local
+            <span class="btn-icon"></span> Simular Fallback Local
           </button>
         </div>
       </div>
@@ -320,7 +338,7 @@
       <div class="live-feed-section">
         <div class="feed-header">
           <div class="feed-title-box">
-            <span class="feed-icon">📜</span>
+            <span class="feed-icon"></span>
             <h3>Libro Notarial de Pujas (SHA-256)</h3>
           </div>
           <span class="feed-badge">POSTGRESQL ACID</span>
@@ -353,10 +371,13 @@
           <span class="admin-badge" id="gavelRoleStatus">CONTROL DE SALA</span>
         </div>
         <div class="hammer-actions">
-          <button type="button" class="btn btn-sm btn-hammer" id="btnActivarSubasta" title="Pasar subasta a estado ACTIVA">🟢 Activar Sala</button>
-          <button type="button" class="btn btn-sm btn-hammer" id="btnMartilloConteo" title="Iniciar conteo oficial EN_CONTEO">🔔 ¡A la una, a las dos! (Conteo)</button>
-          <button type="button" class="btn btn-sm btn-adjudicar" id="btnAdjudicar" title="Cerrar subasta y adjudicar al postor líder">
-            <span>🔨</span> ¡CERRAR Y ADJUDICAR LOTE!
+          <button type="button" class="btn btn-sm btn-hammer" id="btnActivarSubasta"
+            title="Pasar subasta a estado ACTIVA"> Activar Sala</button>
+          <button type="button" class="btn btn-sm btn-hammer" id="btnMartilloConteo"
+            title="Iniciar conteo oficial EN_CONTEO">¡A la una, a las dos! (Conteo)</button>
+          <button type="button" class="btn btn-sm btn-adjudicar" id="btnAdjudicar"
+            title="Cerrar subasta y adjudicar al postor líder">
+            <span></span> ¡CERRAR Y ADJUDICAR LOTE!
           </button>
         </div>
       </div>
@@ -380,8 +401,8 @@
     </div>
 
     <div class="dialog-tabs">
-      <button type="button" class="dialog-tab active" data-auth-tab="login">🔑 Iniciar Sesión</button>
-      <button type="button" class="dialog-tab" data-auth-tab="register">📝 Crear Cuenta (Elegir Rol)</button>
+      <button type="button" class="dialog-tab active" data-auth-tab="login"> Iniciar Sesión</button>
+      <button type="button" class="dialog-tab" data-auth-tab="register"> Crear Cuenta (Elegir Rol)</button>
     </div>
 
     <!-- Pestaña Login -->
@@ -419,14 +440,15 @@
       <div class="form-row-2">
         <div class="form-group">
           <label for="regPassword">Contraseña (mín. 8 caracteres)</label>
-          <input type="password" id="regPassword" required minlength="8" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+          <input type="password" id="regPassword" required minlength="8" placeholder="Mínimo 8 caracteres"
+            autocomplete="new-password">
         </div>
         <div class="form-group">
           <label for="regRole">Rol Solicitado en la Plataforma</label>
           <select id="regRole" required>
-            <option value="POSTOR">👤 POSTOR (Participar y Pujar en Subastas)</option>
-            <option value="VENDEDOR">🏢 VENDEDOR (Consignar Bienes y Subir Lotes)</option>
-            <option value="MARTILLERO">🔨 MARTILLERO (Encargado Oficial de Remates)</option>
+            <option value="POSTOR"> POSTOR (Participar y Pujar en Subastas)</option>
+            <option value="VENDEDOR"> VENDEDOR (Consignar Bienes y Subir Lotes)</option>
+            <option value="MARTILLERO"> MARTILLERO (Encargado Oficial de Remates)</option>
           </select>
         </div>
       </div>
@@ -468,9 +490,10 @@
     </div>
 
     <div class="dialog-tabs">
-      <button type="button" class="dialog-tab active" data-lot-tab="detalles">📷 1. Imagen Referencial y Detalles del Lote</button>
+      <button type="button" class="dialog-tab active" data-lot-tab="detalles">📷 1. Imagen Referencial y Detalles del
+        Lote</button>
       <button type="button" class="dialog-tab" data-lot-tab="encargado">⚖️ 2. Datos del Encargado / Martillero</button>
-      <button type="button" class="dialog-tab" data-lot-tab="nueva">➕ 3. Crear Nueva Subasta</button>
+      <button type="button" class="dialog-tab" data-lot-tab="nueva"> 3. Crear Nueva Subasta</button>
     </div>
 
     <!-- Sub-formulario 1: Subir Imagen Referencial (desde equipo o URL) y Ficha Técnica -->
@@ -478,14 +501,15 @@
       <div class="image-upload-zone">
         <div class="image-preview-box">
           <img id="lotUploadPreviewImg" src="" alt="Vista previa de la imagen referencial" class="hidden" />
-          <span id="lotUploadPlaceholder">📷 Sin imagen seleccionada</span>
+          <span id="lotUploadPlaceholder"> Sin imagen seleccionada</span>
         </div>
         <div class="image-upload-controls">
           <label for="lotImageFileInput" class="btn-file-upload">
-            📤 Subir Imagen Referencial desde mi Dispositivo
+            Subir Imagen Referencial desde mi Dispositivo
           </label>
           <input type="file" id="lotImageFileInput" accept="image/*" class="sr-only">
-          <small class="help-text">El Vendedor o Encargado sube la fotografía real del bien (JPG, PNG, WebP). Se optimiza automáticamente para visualización inmediata.</small>
+          <small class="help-text">El Vendedor o Encargado sube la fotografía real del bien (JPG, PNG, WebP). Se
+            optimiza automáticamente para visualización inmediata.</small>
           <input type="url" id="lotImageUrlInput" placeholder="O pega aquí una URL de imagen externa (https://...)">
         </div>
       </div>
@@ -493,7 +517,8 @@
       <div class="form-row-2">
         <div class="form-group">
           <label for="detCategoria">Categoría del Lote</label>
-          <input type="text" id="detCategoria" required placeholder="Ej. VEHICULOS_4X4, INMUEBLES, JOYERIA" value="VEHICULOS_4X4">
+          <input type="text" id="detCategoria" required placeholder="Ej. VEHICULOS_4X4, INMUEBLES, JOYERIA"
+            value="VEHICULOS_4X4">
         </div>
         <div class="form-group">
           <label for="detUbicacion">Ubicación Física / Almacén de Custodia</label>
@@ -566,7 +591,8 @@
 
       <div class="form-group">
         <label for="encExperiencia">Reseña Profesional / Experiencia del Encargado</label>
-        <textarea id="encExperiencia" rows="3" placeholder="Ej. 14 años dirigiendo remates judiciales, vehiculares y liquidaciones corporativas."></textarea>
+        <textarea id="encExperiencia" rows="3"
+          placeholder="Ej. 14 años dirigiendo remates judiciales, vehiculares y liquidaciones corporativas."></textarea>
       </div>
 
       <div class="dialog-footer">
@@ -589,7 +615,8 @@
 
       <div class="form-group">
         <label for="newSubDesc">Descripción Detallada del Lote</label>
-        <textarea id="newSubDesc" rows="2" required placeholder="Describa la procedencia, estado de conservación y garantías del lote..."></textarea>
+        <textarea id="newSubDesc" rows="2" required
+          placeholder="Describa la procedencia, estado de conservación y garantías del lote..."></textarea>
       </div>
 
       <div class="form-row-2">
@@ -604,7 +631,7 @@
       </div>
 
       <div class="dialog-footer">
-        <button type="submit" class="btn-gold-primary">🚀 Crear y Activar Nueva Subasta</button>
+        <button type="submit" class="btn-gold-primary"> Crear y Activar Nueva Subasta</button>
       </div>
     </form>
   </dialog>
@@ -644,7 +671,7 @@
         </select>
       </div>
 
-      <button type="button" class="btn-pill-quick" id="btnRefreshUsers">🔄 Actualizar Padrón</button>
+      <button type="button" class="btn-pill-quick" id="btnRefreshUsers"> Actualizar Padrón</button>
     </div>
 
     <div id="adminFeedbackMsg" class="dialog-feedback hidden"></div>
@@ -652,7 +679,8 @@
     <!-- Tabla Responsiva con Estándar de Accesibilidad y Container Queries -->
     <div tabindex="0" role="region" aria-labelledby="admin-users-caption" class="table-wrapper">
       <table class="admin-users-table">
-        <caption id="admin-users-caption" class="sr-only">Directorio de usuarios registrados, estado KYC y asignación de roles RBAC</caption>
+        <caption id="admin-users-caption" class="sr-only">Directorio de usuarios registrados, estado KYC y asignación de
+          roles RBAC</caption>
         <thead>
           <tr>
             <th>Usuario / Correo</th>
@@ -691,11 +719,13 @@
       <div class="stripe-split-banner">
         <div class="stripe-step-pill">
           <strong>1. Backend Go + PostgreSQL</strong>
-          <span>Calcula monto exacto (10% / 20% IA) y crea <code>PaymentIntent</code> (<code>capture_method: manual</code>).</span>
+          <span>Calcula monto exacto (10% / 20% IA) y crea <code>PaymentIntent</code>
+            (<code>capture_method: manual</code>).</span>
         </div>
         <div class="stripe-step-pill">
           <strong>2. Frontend Stripe Elements</strong>
-          <span>Tokeniza tarjeta en el navegador sin enviar PAN/CVV al servidor propio y confirma <code>pi_...</code>.</span>
+          <span>Tokeniza tarjeta en el navegador sin enviar PAN/CVV al servidor propio y confirma
+            <code>pi_...</code>.</span>
         </div>
       </div>
 
@@ -725,20 +755,22 @@
         </div>
         <div class="form-group">
           <label for="stripeCardHolder">Titular de la Tarjeta</label>
-          <input type="text" id="stripeCardHolder" required placeholder="Nombre como figura en la tarjeta" autocomplete="cc-name">
+          <input type="text" id="stripeCardHolder" required placeholder="Nombre como figura en la tarjeta"
+            autocomplete="cc-name">
         </div>
       </div>
 
       <!-- Widget Simulado de Stripe Elements (Tokenización directa Cliente -> Stripe) -->
       <div class="stripe-card-element-box">
         <div class="stripe-card-header">
-          <span>🔒 Stripe Secure Card Frame (PCI-DSS Tokenized)</span>
+          <span> Stripe Secure Card Frame (PCI-DSS Tokenized)</span>
           <span class="stripe-brand-badges">VISA • MASTERCARD • AMEX</span>
         </div>
         <div class="stripe-card-grid">
           <div class="form-group">
             <label for="stripeCardNumber">Número de Tarjeta (Sandbox Stripe)</label>
-            <input type="text" id="stripeCardNumber" value="4242 •••• •••• 4242" readonly aria-readonly="true" title="Tarjeta de prueba oficial de Stripe tokenizada en navegador">
+            <input type="text" id="stripeCardNumber" value="4242 •••• •••• 4242" readonly aria-readonly="true"
+              title="Tarjeta de prueba oficial de Stripe tokenizada en navegador">
           </div>
           <div class="form-group">
             <label for="stripeCardExp">Vencimiento</label>
@@ -749,18 +781,21 @@
             <input type="text" id="stripeCardCvc" value="•••" readonly aria-readonly="true">
           </div>
         </div>
-        <small class="help-text">Los dígitos PAN/CVC permanecen aislados en el iframe de Stripe. El Backend Go solo recibe el identificador <code>pi_stripe_hold_...</code>.</small>
+        <small class="help-text">Los dígitos PAN/CVC permanecen aislados en el iframe de Stripe. El Backend Go solo
+          recibe el identificador <code>pi_stripe_hold_...</code>.</small>
       </div>
 
       <div id="stripeFeedbackMsg" class="dialog-feedback hidden"></div>
 
       <div class="dialog-footer">
-        <button type="button" class="btn-pill-quick" id="btnRecalcStripeIntent">🔄 Recalcular PaymentIntent</button>
-        <button type="submit" class="btn-gold-primary" id="btnConfirmStripeHold">💳 Autorizar Retención (Hold) en Stripe</button>
+        <button type="button" class="btn-pill-quick" id="btnRecalcStripeIntent"> Recalcular PaymentIntent</button>
+        <button type="submit" class="btn-gold-primary" id="btnConfirmStripeHold"> Autorizar Retención (Hold) en
+          Stripe</button>
       </div>
     </form>
   </dialog>
 
   <script src="/app.js"></script>
 </body>
+
 </html>

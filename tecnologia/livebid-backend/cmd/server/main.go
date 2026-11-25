@@ -186,6 +186,9 @@ func main() {
 		_, _ = w.Write([]byte(resp))
 	})
 
+	// Documentación Interactiva OpenAPI 3.0 / Swagger UI
+	handlers.RegisterSwaggerRoutes(mux)
+
 	// Autenticación y Perfil
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
