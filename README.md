@@ -39,7 +39,8 @@ PlataformaSubastas-arquitSoft-02-Fernando/
 │   │   ├── enfoque-aquitectonico.md
 │   │   ├── livebid-arquitectura.architecture.json
 │   │   └── livebid-arquitectura.html       # Diagrama interactivo explorable
-│   ├── 03-diseño-de-software/              # SDD: diseño interno de módulos, patrones GoF/Cloud y SOLID
+│   ├── 03-diseño-de-software/              # SDD: diseño interno, BD/caché, patrones GoF/Cloud y SOLID
+│   │   ├── analisis-bd-y-estrategia-cache.md
 │   │   └── diseño-interno/
 │   │       ├── diseño-interno-de-modulos.md
 │   │       ├── patrones-de-diseño.md

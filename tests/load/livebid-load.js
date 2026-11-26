@@ -22,6 +22,8 @@ const PROFILES = {
     ],
     bidVUs: 15,
     bidDuration: '15s',
+    readSleepSec: 0.1,
+    bidSleepSec: 0.15,
     wsStages: [
       { duration: '5s', target: 40 },
       { duration: '15s', target: 40 },
@@ -30,22 +32,24 @@ const PROFILES = {
     wsHoldMs: 3000,
   },
   scale2000: {
-    label: 'Escala Produccion Azure (2,100 VUs: 1,600 WS + 450 Catalogo + 50 Pujadores)',
+    label: 'Escala Produccion Azure (2,000 VUs: 1,650 WS + 325 Catalogo + 25 Pujadores)',
     readStages: [
-      { duration: '15s', target: 200 },
-      { duration: '30s', target: 450 },
-      { duration: '30s', target: 450 },
+      { duration: '15s', target: 150 },
+      { duration: '20s', target: 325 },
+      { duration: '25s', target: 325 },
       { duration: '10s', target: 0 },
     ],
-    bidVUs: 50,
-    bidDuration: '60s',
+    bidVUs: 25,
+    bidDuration: '50s',
+    readSleepSec: 1.0,
+    bidSleepSec: 0.6,
     wsStages: [
-      { duration: '20s', target: 800 },
-      { duration: '25s', target: 1600 },
-      { duration: '30s', target: 1600 },
+      { duration: '20s', target: 850 },
+      { duration: '20s', target: 1650 },
+      { duration: '20s', target: 1650 },
       { duration: '10s', target: 0 },
     ],
-    wsHoldMs: 12000,
+    wsHoldMs: 42000,
   },
   stress5000: {
     label: 'Stress Futuro Crecimiento (5,000 VUs: 3,800 WS + 1,100 Catalogo + 100 Pujadores)',
@@ -57,6 +61,8 @@ const PROFILES = {
     ],
     bidVUs: 100,
     bidDuration: '80s',
+    readSleepSec: 0.8,
+    bidSleepSec: 0.6,
     wsStages: [
       { duration: '30s', target: 1800 },
       { duration: '40s', target: 3800 },
@@ -228,7 +234,7 @@ export function catalogReadFlow(data) {
     'GET /health UP': (r) => r.status === 200,
   });
 
-  sleep(0.1);
+  sleep(activeCfg.readSleepSec);
 }
 
 export function concurrentBidFlow(data) {
@@ -260,7 +266,7 @@ export function concurrentBidFlow(data) {
   check(res, {
     'Bid handled atomically (201 or 409, zero 5xx)': (r) => r.status === 201 || r.status === 409,
   });
-  sleep(0.15);
+  sleep(activeCfg.bidSleepSec);
 }
 
 export function websocketSpectatorFlow(data) {
@@ -321,12 +327,14 @@ export function handleSummary(data) {
     <h1>LiveBid — Reporte Oficial de Pruebas de Carga (k6)</h1>
     <p class="sub">Perfil: <strong>${activeCfg.label}</strong> &bull; Entorno: Cloudflare Edge / Nginx LB &rarr; 2 Réplicas Go &rarr; PgBouncer + PostgreSQL 16 + Redis 7</p>
     <div class="grid">
+      <div class="card"><div class="label">Pico Usuarios Concurrentes (VUs)</div><div class="val ok">${metricVal(data, 'vus', 'max')}</div></div>
       <div class="card"><div class="label">Total Peticiones HTTP</div><div class="val">${metricVal(data, 'http_reqs', 'count')}</div></div>
       <div class="card"><div class="label">Throughput (req/s)</div><div class="val">${metricVal(data, 'http_reqs', 'rate')}</div></div>
       <div class="card"><div class="label">P95 Puja Concurrente</div><div class="val ok">${metricVal(data, 'livebid_bid_duration_ms', 'p(95)')} ms</div></div>
       <div class="card"><div class="label">Tasa de Checks Exitosos</div><div class="val ok">${checksPct}</div></div>
       <div class="card"><div class="label">Errores 5xx</div><div class="val ok">${metricVal(data, 'livebid_http_5xx_errors', 'count')}</div></div>
       <div class="card"><div class="label">Conexiones WebSocket</div><div class="val">${metricVal(data, 'livebid_ws_connected', 'count')}</div></div>
+      <div class="card"><div class="label">Eventos WS Difundidos</div><div class="val">${metricVal(data, 'ws_msgs_received', 'count')}</div></div>
     </div>
     <table>
       <thead><tr><th>Métrica</th><th>Avg</th><th>Med (P50)</th><th>P90</th><th>P95</th><th>Max</th></tr></thead>

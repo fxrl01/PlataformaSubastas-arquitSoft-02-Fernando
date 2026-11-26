@@ -3,6 +3,8 @@ package persistence_test
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,13 +13,17 @@ import (
 )
 
 type stubAuctionRepo struct {
-	auctions map[string]*domain.Subasta
-	getCalls int
-	listCalls int
+	auctions  map[string]*domain.Subasta
+	getCalls  int32
+	listCalls int32
+	delay     time.Duration
 }
 
 func (r *stubAuctionRepo) ObtenerPorID(_ context.Context, id string) (*domain.Subasta, error) {
-	r.getCalls++
+	if r.delay > 0 {
+		time.Sleep(r.delay)
+	}
+	atomic.AddInt32(&r.getCalls, 1)
 	s, ok := r.auctions[id]
 	if !ok {
 		return nil, domain.ErrSubastaNoEncontrada
@@ -33,7 +39,10 @@ func (r *stubAuctionRepo) Guardar(_ context.Context, subasta *domain.Subasta) er
 }
 
 func (r *stubAuctionRepo) Listar(_ context.Context) ([]*domain.Subasta, error) {
-	r.listCalls++
+	if r.delay > 0 {
+		time.Sleep(r.delay)
+	}
+	atomic.AddInt32(&r.listCalls, 1)
 	out := make([]*domain.Subasta, 0, len(r.auctions))
 	for _, s := range r.auctions {
 		copySub := *s
@@ -149,5 +158,44 @@ func TestDefaultPoolOptionsFromEnvUsesSafeBounds(t *testing.T) {
 	opts := persistence.DefaultPoolOptionsFromEnv()
 	if opts.MaxConns != 40 || opts.MinConns != 8 || !opts.SimpleProtocol {
 		t.Fatalf("unexpected pool options: %+v", opts)
+	}
+}
+
+func TestCachedAuctionRepositorySingleflightPreventsCacheStampede(t *testing.T) {
+	now := time.Now()
+	base := &stubAuctionRepo{
+		auctions: map[string]*domain.Subasta{
+			"sub-sf": domain.NuevaSubasta("sub-sf", "Escultura Bronce", "", 5000, now, now.Add(time.Hour)),
+		},
+		delay: 25 * time.Millisecond,
+	}
+	// Cache deshabilitada (simula ráfaga de Cache Miss simultáneo) para verificar coalescencia pura
+	cache := &inMemoryDistCache{data: make(map[string][]byte), failAll: true}
+	repo := persistence.NewCachedAuctionRepository(base, cache, 15*time.Second)
+
+	const workers = 20
+	var wg sync.WaitGroup
+	wg.Add(workers * 2)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			if _, err := repo.Listar(context.Background()); err != nil {
+				t.Errorf("concurrent Listar error: %v", err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if _, err := repo.ObtenerPorID(context.Background(), "sub-sf"); err != nil {
+				t.Errorf("concurrent ObtenerPorID error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&base.listCalls); got != 1 {
+		t.Fatalf("expected singleflight to coalesce 20 Listar calls into 1 DB call, got %d", got)
+	}
+	if got := atomic.LoadInt32(&base.getCalls); got != 1 {
+		t.Fatalf("expected singleflight to coalesce 20 ObtenerPorID calls into 1 DB call, got %d", got)
 	}
 }

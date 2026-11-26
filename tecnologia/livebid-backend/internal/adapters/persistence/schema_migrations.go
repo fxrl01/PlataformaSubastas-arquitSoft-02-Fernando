@@ -20,6 +20,7 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		ALTER TABLE subastas ADD COLUMN IF NOT EXISTS martillero_id VARCHAR(64) REFERENCES usuarios(id);
 		ALTER TABLE subastas ADD COLUMN IF NOT EXISTS encargado_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 		ALTER TABLE subastas ADD COLUMN IF NOT EXISTS detalles_lote_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+		CREATE INDEX IF NOT EXISTS idx_subastas_created_at ON subastas(created_at DESC);
 	`
 	if _, err := pool.Exec(ctx, ddl); err != nil {
 		return fmt.Errorf("ensure schema migrations: %w", err)
