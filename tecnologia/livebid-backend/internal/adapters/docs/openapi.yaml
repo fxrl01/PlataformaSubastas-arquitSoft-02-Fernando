@@ -866,6 +866,33 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /api/v1/ia/asistente:
+    post:
+      tags:
+        - M5 - Inteligencia Artificial y Auto-Puja
+      summary: Consultar al Asistente Concierge de la plataforma (Google Gemini + contexto en vivo PostgreSQL)
+      description: |
+        Responde preguntas de visitantes, compradores, vendedores y martilleros sobre el funcionamiento de la casa de subastas
+        (registro, publicacion de bienes de valor, deposito de garantia reembolsable, ofertas en vivo y regla Anti-Sniping +30 s),
+        enriqueciendo la respuesta con el estado actual del lote consultado en PostgreSQL.
+        Si `GEMINI_API_KEY` esta configurada invoca `gemini-2.5-flash`; de lo contrario responde con guia contextual determinista.
+      operationId: askPlatformAssistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssistantChatRequest"
+      responses:
+        "200":
+          description: Respuesta contextual del asistente IA y sugerencias rapidas de seguimiento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssistantReply"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+
   /api/v1/subastas/{id}/inteligencia-ia:
     get:
       tags:
@@ -1802,3 +1829,60 @@ components:
         closed_at:
           type: string
           format: date-time
+
+    AssistantTurn:
+      type: object
+      required: [rol, texto]
+      properties:
+        rol:
+          type: string
+          enum: [user, assistant]
+          example: user
+        texto:
+          type: string
+          example: ¿Como funciona el deposito reembolsable?
+
+    AssistantChatRequest:
+      type: object
+      required: [mensaje]
+      properties:
+        mensaje:
+          type: string
+          example: ¿Cuanto necesito para ofertar en este lote?
+        subasta_id:
+          type: string
+          example: SUB-2026-001
+        rol_usuario:
+          type: string
+          example: POSTOR
+        nombre_usuario:
+          type: string
+          example: Elena Vargas
+        tiene_garantia:
+          type: boolean
+          example: false
+        historial:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssistantTurn"
+
+    AssistantReply:
+      type: object
+      required: [respuesta, proveedor, modelo, modo_local]
+      properties:
+        respuesta:
+          type: string
+          example: Sobre Toyota Hilux GR-Sport 2022 4x4 (SUB-2026-001)...
+        proveedor:
+          type: string
+          example: google-gemini
+        modelo:
+          type: string
+          example: gemini-2.5-flash
+        modo_local:
+          type: boolean
+          example: false
+        sugerencias:
+          type: array
+          items:
+            type: string

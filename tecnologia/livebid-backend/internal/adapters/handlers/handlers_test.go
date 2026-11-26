@@ -259,9 +259,10 @@ func buildTestRouter(t *testing.T) (http.Handler, *services.AuthService) {
 	bidH := handlers.NewBidHandler(bidSvc)
 	historyH := handlers.NewBidHistoryHandler(historySvc)
 	guaranteeH := handlers.NewGuaranteeHandler(guaranteeSvc)
-	aiH := handlers.NewAgentAIHandler(agentSvc, router, breaker, detector)
+	aiH := handlers.NewAgentAIHandler(agentSvc, router, breaker, detector).WithAssistant(ai.NewGeminiAssistant(""), auctions)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/ia/asistente", aiH.AssistantChat)
 	mux.HandleFunc("POST /api/v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
@@ -453,6 +454,19 @@ func TestHandlersFullHTTPFlowAndRBAC(t *testing.T) {
 	}
 	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/subastas/"+auctionID+"/inteligencia-ia", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("intelligence report failed: %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/ia/asistente", "", map[string]any{
+		"mensaje":        "¿Cuanto necesito para ofertar en este lote?",
+		"subasta_id":     auctionID,
+		"rol_usuario":    "POSTOR",
+		"nombre_usuario": "Postor HTTP",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("assistant chat failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/ia/asistente", "", map[string]any{
+		"mensaje": "   ",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on empty assistant message, got %d", rec.Code)
 	}
 
 	// 5. Conteo, Cierre y Auditoría Web3 + Webhook Stripe

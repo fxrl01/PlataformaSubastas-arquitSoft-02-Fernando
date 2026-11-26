@@ -109,6 +109,7 @@ func main() {
 	failThreshold := envInt("CIRCUIT_BREAKER_FAIL_THRESHOLD", 3)
 	cbTimeout := time.Duration(envInt("CIRCUIT_BREAKER_TIMEOUT_MS", 2000)) * time.Millisecond
 	geminiProvider := ai.NewGeminiRiskAdapter(os.Getenv("GEMINI_API_KEY"))
+	geminiAssistant := ai.NewGeminiAssistant(os.Getenv("GEMINI_API_KEY"))
 	riskBreaker := ai.NewCircuitBreakerIA(geminiProvider, failThreshold, 3*time.Second, cbTimeout)
 
 	aiRouter := ai.NewMultiModelRouter("gemini-2.5-flash", riskBreaker, time.Minute)
@@ -165,7 +166,8 @@ func main() {
 	bidHandler := handlers.NewBidHandler(bidService)
 	bidHistoryHandler := handlers.NewBidHistoryHandler(bidHistoryService)
 	guaranteeHandler := handlers.NewGuaranteeHandler(guaranteeService)
-	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector)
+	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector).
+		WithAssistant(geminiAssistant, auctionRepository)
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
 	// 6. Router HTTP estándar de Go
@@ -222,6 +224,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/subastas/{id}/pujas", bidHistoryHandler.List)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/auditoria-web3", auctionHandler.AuditWeb3)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/inteligencia-ia", agentAIHandler.IntelligenceReport)
+	mux.HandleFunc("POST /api/v1/ia/asistente", agentAIHandler.AssistantChat)
 	mux.Handle("POST /api/v1/subastas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleSeller, domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Create))))

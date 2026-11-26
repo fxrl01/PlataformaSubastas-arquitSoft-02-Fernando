@@ -28,6 +28,17 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     expect(openApiRes.ok()).toBeTruthy();
     const openApiSpec = await openApiRes.json();
     expect(openApiSpec.openapi).toBe('3.0.3');
+
+    const aiAssistantRes = await request.post('/api/v1/ia/asistente', {
+      data: {
+        mensaje: '¿Cómo puedo subir y vender un bien de valor?',
+        subasta_id: 'SUB-2026-001',
+        rol_usuario: 'VISITANTE'
+      }
+    });
+    expect(aiAssistantRes.ok()).toBeTruthy();
+    const aiBody = await aiAssistantRes.json();
+    expect(aiBody.respuesta).toContain('Vendedor');
   });
 
   test('Flujo E2E completo con 2 navegadores: Registro -> KYC Admin -> Nueva Subasta -> Stripe Hold -> Puja WS -> Cierre y Merkle', async ({ browser, request }) => {
@@ -41,8 +52,15 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     const bidderPage = await bidderContext.newPage();
 
     try {
-      // 1. Navegador Postor: Registrarse con rol POSTOR
+      // 1. Navegador Postor: Verificar vitrina PostgreSQL + Asistente IA lateral y registrarse con rol POSTOR
       await bidderPage.goto('/');
+      await expect(bidderPage.locator('#catalogGrid article.catalog-card').first()).toBeVisible({ timeout: 10_000 });
+      await expect(bidderPage.locator('#navUserName')).toHaveText('Visitante');
+      await bidderPage.locator('#btnOpenAiDrawer').click();
+      await expect(bidderPage.locator('#aiAssistantDrawer')).toBeVisible();
+      await bidderPage.locator('#btnCloseAiDrawer').click();
+      await expect(bidderPage.locator('#aiAssistantDrawer')).toBeHidden({ timeout: 5_000 });
+
       await bidderPage.locator('#btnOpenAuthModal').click();
       await bidderPage.locator('[data-auth-tab="register"]').click();
       await bidderPage.locator('#regName').fill('Postor E2E Playwright');
