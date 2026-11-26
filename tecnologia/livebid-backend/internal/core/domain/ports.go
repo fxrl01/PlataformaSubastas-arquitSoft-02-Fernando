@@ -20,6 +20,43 @@ type AdminUserRepository interface {
 	UpdateKYCAndStatus(ctx context.Context, id string, status UserStatus, kycApproved bool) error
 }
 
+// UserProfileUpdater permite al propio usuario actualizar sus datos personales y biografía.
+type UserProfileUpdater interface {
+	UpdateProfile(ctx context.Context, id, name, phone, documentID, walletAddress, bio string) error
+}
+
+// SocialComment representa un comentario dentro de una publicación de la comunidad.
+type SocialComment struct {
+	ID         string    `json:"id"`
+	PostID     string    `json:"post_id"`
+	AuthorName string    `json:"autor_nombre"`
+	Text       string    `json:"comentario"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// SocialPost representa una publicación en el muro social abierto de la plataforma.
+type SocialPost struct {
+	ID         string          `json:"id"`
+	AuthorID   string          `json:"autor_id"`
+	AuthorName string          `json:"autor_nombre"`
+	AuthorRole UserRole        `json:"autor_rol"`
+	Content    string          `json:"contenido"`
+	ImageURL   string          `json:"imagen_url,omitempty"`
+	AuctionID  string          `json:"subasta_id,omitempty"`
+	Tag        string          `json:"etiqueta"`
+	LikesCount int             `json:"likes_count"`
+	CreatedAt  time.Time       `json:"created_at"`
+	Comments   []SocialComment `json:"comentarios"`
+}
+
+// SocialFeedRepository define la persistencia para publicaciones, reacciones y comentarios sociales.
+type SocialFeedRepository interface {
+	ListPosts(ctx context.Context, limit int) ([]SocialPost, error)
+	CreatePost(ctx context.Context, post SocialPost) (SocialPost, error)
+	LikePost(ctx context.Context, postID string) (int, error)
+	AddComment(ctx context.Context, comment SocialComment) (SocialComment, error)
+}
+
 type PasswordHasher interface {
 	Hash(password string) (string, error)
 	Compare(hash, password string) error

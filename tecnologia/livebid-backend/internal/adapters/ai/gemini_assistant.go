@@ -230,6 +230,12 @@ func buildContextualGuideReply(q AssistantQuery) string {
 	}
 
 	switch {
+	case strings.Contains(lower, "cronograma") || strings.Contains(lower, "horario") || strings.Contains(lower, "agenda") || strings.Contains(lower, "buscar"):
+		return fmt.Sprintf("En la sección **Cronograma** (primera pestaña superior) puedes buscar cualquier bien por nombre, categoría o ciudad, filtrar entre **En vivo ahora**, **Próximas** y **Finalizadas**, guardar lotes en tus favoritos (⭐) y entrar a la sala con un solo clic. Actualmente hay **%d bien(es)** registrados.", maxInt(ac.TotalCatalog, 1))
+
+	case strings.Contains(lower, "social") || strings.Contains(lower, "comunidad") || strings.Contains(lower, "muro") || strings.Contains(lower, "perfil") || strings.Contains(lower, "modo claro") || strings.Contains(lower, "oscuro"):
+		return "La plataforma cuenta con secciones interactivas abiertas:\n\n• **Social Feed:** comparte novedades, adelantos de lotes con foto, reacciones y comentarios con otros coleccionistas y vendedores.\n• **Mi Perfil y Ajustes:** edita tu nombre, teléfono y biografía, revisa tus subastas guardadas y elige entre **Modo Claro**, **Modo Oscuro** o **Automático del sistema**."
+
 	case strings.Contains(lower, "vender") || strings.Contains(lower, "subir") || strings.Contains(lower, "publicar") || strings.Contains(lower, "producto") || strings.Contains(lower, "bien") || strings.Contains(lower, "lote"):
 		return fmt.Sprintf("Para publicar un bien u objeto de valor en subasta sigue estos pasos:\n\n1. **Cuenta de Vendedor:** Crea tu cuenta eligiendo el perfil **Vendedor / Consignante** (una vez verificada tu identidad quedará activa).\n2. **Publicar Bien:** Haz clic en el botón **«Publicar Bien»** en la parte superior o en la sección de catálogo.\n3. **Fotografía y Ficha:** Sube la foto desde tu celular o computadora, indica el título, categoría (vehículos, relojería, joyas, arte o inmuebles), precio base de apertura, ubicación y duración.\n\nAl guardar, el bien aparece inmediatamente en la **Colección de Bienes en Subasta** (actualmente hay **%d lote(s)** publicados) listo para recibir ofertas en vivo.", maxInt(ac.TotalCatalog, 1))
 

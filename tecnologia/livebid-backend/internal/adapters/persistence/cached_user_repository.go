@@ -144,6 +144,16 @@ func (r *CachedUserRepository) UpdateRole(ctx context.Context, id string, role d
 	return nil
 }
 
+func (r *CachedUserRepository) UpdateProfile(ctx context.Context, id, name, phone, documentID, walletAddress, bio string) error {
+	if updater, ok := r.inner.(domain.UserProfileUpdater); ok {
+		if err := updater.UpdateProfile(ctx, id, name, phone, documentID, walletAddress, bio); err != nil {
+			return err
+		}
+		r.Invalidate(id)
+	}
+	return nil
+}
+
 func (r *CachedUserRepository) Invalidate(id string) {
 	r.invalidateLocal(id)
 	if r.redisClient != nil && id != "" {

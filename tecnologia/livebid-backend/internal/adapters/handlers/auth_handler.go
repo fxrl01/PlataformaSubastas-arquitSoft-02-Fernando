@@ -225,6 +225,14 @@ func (h *AuthHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+type updateProfileRequest struct {
+	Name          string `json:"name,omitempty"`
+	Phone         string `json:"telefono,omitempty"`
+	DocumentID    string `json:"documento_identidad,omitempty"`
+	WalletAddress string `json:"wallet_address,omitempty"`
+	Bio           string `json:"bio,omitempty"`
+}
+
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	user, ok := CurrentUser(r)
 	if !ok {
@@ -238,6 +246,34 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
+	var req updateProfileRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if h.auth == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "profile service unavailable"})
+		return
+	}
+	updated, err := h.auth.UpdateProfile(r.Context(), user.ID, services.UpdateProfileCmd{
+		Name:          req.Name,
+		Phone:         req.Phone,
+		DocumentID:    req.DocumentID,
+		WalletAddress: req.WalletAddress,
+		Bio:           req.Bio,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "could not update profile"})
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {

@@ -52,10 +52,23 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     const bidderPage = await bidderContext.newPage();
 
     try {
-      // 1. Navegador Postor: Verificar vitrina PostgreSQL + Asistente IA lateral y registrarse con rol POSTOR
+      // 1. Navegador Postor: Verificar Cronograma, Modo Claro/Oscuro, Catálogo dedicado, Social Feed, Perfil y Asistente IA
       await bidderPage.goto('/');
-      await expect(bidderPage.locator('#catalogGrid article.catalog-card').first()).toBeVisible({ timeout: 10_000 });
+      await expect(bidderPage.locator('#scheduleGrid article.schedule-card').first()).toBeVisible({ timeout: 10_000 });
       await expect(bidderPage.locator('#navUserName')).toHaveText('Visitante');
+
+      // Verificar cambio Modo Claro / Modo Oscuro
+      await bidderPage.locator('#btnThemeToggle').click();
+
+      // Verificar sección dedicada de Catálogo
+      await bidderPage.locator('[data-nav-view="catalogo"]').click();
+      await expect(bidderPage.locator('#catalogGrid article.catalog-card').first()).toBeVisible({ timeout: 10_000 });
+
+      // Verificar sección abierta de Social Feed desde PostgreSQL
+      await bidderPage.locator('[data-nav-view="social"]').click();
+      await expect(bidderPage.locator('#socialFeedList article.social-post-card').first()).toBeVisible({ timeout: 10_000 });
+
+      // Verificar Asistente IA dinámico
       await bidderPage.locator('#btnOpenAiDrawer').click();
       await expect(bidderPage.locator('#aiAssistantDrawer')).toBeVisible();
       await bidderPage.locator('#btnCloseAiDrawer').click();

@@ -168,6 +168,8 @@ func main() {
 	guaranteeHandler := handlers.NewGuaranteeHandler(guaranteeService)
 	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector).
 		WithAssistant(geminiAssistant, auctionRepository)
+	socialRepo := persistence.NewPostgresSocialRepository(pool, readPool)
+	socialHandler := handlers.NewSocialHandler(socialRepo, userRepository)
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
 
 	// 6. Router HTTP estándar de Go
@@ -200,6 +202,13 @@ func main() {
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
 	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.Me)))
+	mux.Handle("PATCH /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.UpdateMe)))
+
+	// Muro Social Abierto (Comunidad de Vendedores, Coleccionistas y Martilleros)
+	mux.HandleFunc("GET /api/v1/social/posts", socialHandler.ListPosts)
+	mux.Handle("POST /api/v1/social/posts", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.CreatePost)))
+	mux.HandleFunc("POST /api/v1/social/posts/{id}/like", socialHandler.LikePost)
+	mux.Handle("POST /api/v1/social/posts/{id}/comentarios", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.AddComment)))
 
 	// Gobernanza RBAC y Administración de Usuarios (Rol ADMIN)
 	mux.Handle("GET /api/v1/admin/users",

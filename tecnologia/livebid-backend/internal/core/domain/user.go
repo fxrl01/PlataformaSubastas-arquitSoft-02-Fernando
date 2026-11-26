@@ -67,6 +67,7 @@ type User struct {
 	DocumentID    string
 	Phone         string
 	WalletAddress string
+	Bio           string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

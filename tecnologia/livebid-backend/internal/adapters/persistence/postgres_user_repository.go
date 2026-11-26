@@ -23,6 +23,7 @@ const userSelectColumns = `
 	SELECT id, nombre, email, password_hash, rol,
 		COALESCE(rol_solicitado, rol), estado, COALESCE(kyc_aprobado, false),
 		COALESCE(documento_identidad, ''), COALESCE(telefono, ''), COALESCE(wallet_address, ''),
+		COALESCE(bio, ''),
 		created_at, updated_at
 	FROM usuarios`
 
@@ -90,6 +91,7 @@ func scanUser(row rowScanner) (*domain.User, error) {
 		&user.DocumentID,
 		&user.Phone,
 		&user.WalletAddress,
+		&user.Bio,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -104,13 +106,13 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User) er
 	const query = `
 		INSERT INTO usuarios
 			(id, nombre, email, password_hash, rol, rol_solicitado, estado, kyc_aprobado,
-			 documento_identidad, telefono, wallet_address, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+			 documento_identidad, telefono, wallet_address, bio, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	_, err := r.pool.Exec(ctx, query,
 		user.ID, user.Name, user.Email, user.PasswordHash,
 		user.Role, requestedRole, user.Status, user.KYCApproved,
-		user.DocumentID, user.Phone, user.WalletAddress,
+		user.DocumentID, user.Phone, user.WalletAddress, user.Bio,
 		user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
@@ -149,6 +151,22 @@ func (r *PostgresUserRepository) UpdateRole(ctx context.Context, id string, role
 	)
 	if err != nil {
 		return fmt.Errorf("update user role: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *PostgresUserRepository) UpdateProfile(ctx context.Context, id, name, phone, documentID, walletAddress, bio string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE usuarios
+		 SET nombre = $1, telefono = $2, documento_identidad = $3, wallet_address = $4, bio = $5, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $6`,
+		name, phone, documentID, walletAddress, bio, id,
+	)
+	if err != nil {
+		return fmt.Errorf("update user profile: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return domain.ErrUserNotFound

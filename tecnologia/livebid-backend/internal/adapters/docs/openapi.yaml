@@ -158,6 +158,131 @@ paths:
                 $ref: "#/components/schemas/UserView"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+    patch:
+      tags:
+        - M1 - Identidad, Auth & RBAC
+      summary: Actualizar datos personales y biografia del usuario autenticado
+      security:
+        - BearerAuth: []
+      operationId: updateCurrentProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Perfil actualizado en PostgreSQL e invalidado en cache
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserView"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/social/posts:
+    get:
+      tags:
+        - M2 - Catalogo, Lotes & Ciclo de Vida
+      summary: Listar publicaciones recientes del muro Social Feed
+      operationId: listSocialPosts
+      responses:
+        "200":
+          description: Listado cronologico inverso de publicaciones y comentarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SocialPost"
+    post:
+      tags:
+        - M2 - Catalogo, Lotes & Ciclo de Vida
+      summary: Publicar novedad, adelanto de lote o consulta en el Social Feed
+      security:
+        - BearerAuth: []
+      operationId: createSocialPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSocialPostRequest"
+      responses:
+        "201":
+          description: Publicacion registrada en PostgreSQL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialPost"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/social/posts/{id}/like:
+    post:
+      tags:
+        - M2 - Catalogo, Lotes & Ciclo de Vida
+      summary: Registrar reaccion de interes en una publicacion del Social Feed
+      operationId: likeSocialPost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador de la publicacion (`soc_...`)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contador actualizado de reacciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post_id:
+                    type: string
+                  likes_count:
+                    type: integer
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/social/posts/{id}/comentarios:
+    post:
+      tags:
+        - M2 - Catalogo, Lotes & Ciclo de Vida
+      summary: Agregar un comentario en una publicacion del Social Feed
+      security:
+        - BearerAuth: []
+      operationId: commentSocialPost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador de la publicacion (`soc_...`)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSocialCommentRequest"
+      responses:
+        "201":
+          description: Comentario registrado en PostgreSQL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialComment"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
 
   /api/v1/admin/users:
     get:
@@ -1253,6 +1378,8 @@ components:
           type: string
         wallet_address:
           type: string
+        bio:
+          type: string
         created_at:
           type: string
           format: date-time
@@ -1886,3 +2013,89 @@ components:
           type: array
           items:
             type: string
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Elena Vargas
+        telefono:
+          type: string
+          example: "+51 999 777 555"
+        documento_identidad:
+          type: string
+          example: DNI 45892103
+        wallet_address:
+          type: string
+        bio:
+          type: string
+          example: Coleccionista de alta relojeria e interesada en arte contemporaneo.
+
+    CreateSocialPostRequest:
+      type: object
+      required: [contenido]
+      properties:
+        contenido:
+          type: string
+          example: Compartimos fotografias del proximo lote verificado para la agenda de hoy.
+        imagen_url:
+          type: string
+        subasta_id:
+          type: string
+          example: SUB-2026-001
+        etiqueta:
+          type: string
+          example: ADELANTO DE LOTE
+
+    CreateSocialCommentRequest:
+      type: object
+      required: [comentario]
+      properties:
+        comentario:
+          type: string
+          example: Excelente estado de conservacion, estare atento al inicio en sala.
+
+    SocialComment:
+      type: object
+      properties:
+        id:
+          type: string
+        post_id:
+          type: string
+        autor_nombre:
+          type: string
+        comentario:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    SocialPost:
+      type: object
+      properties:
+        id:
+          type: string
+        autor_id:
+          type: string
+        autor_nombre:
+          type: string
+        autor_rol:
+          $ref: "#/components/schemas/UserRole"
+        contenido:
+          type: string
+        imagen_url:
+          type: string
+        subasta_id:
+          type: string
+        etiqueta:
+          type: string
+        likes_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        comentarios:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialComment"

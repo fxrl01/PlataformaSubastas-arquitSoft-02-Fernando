@@ -260,13 +260,19 @@ func buildTestRouter(t *testing.T) (http.Handler, *services.AuthService) {
 	historyH := handlers.NewBidHistoryHandler(historySvc)
 	guaranteeH := handlers.NewGuaranteeHandler(guaranteeSvc)
 	aiH := handlers.NewAgentAIHandler(agentSvc, router, breaker, detector).WithAssistant(ai.NewGeminiAssistant(""), auctions)
+	socialH := handlers.NewSocialHandler(handlers.NewMemorySocialRepository(), users)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/ia/asistente", aiH.AssistantChat)
+	mux.HandleFunc("GET /api/v1/social/posts", socialH.ListPosts)
+	mux.Handle("POST /api/v1/social/posts", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.CreatePost)))
+	mux.HandleFunc("POST /api/v1/social/posts/{id}/like", socialH.LikePost)
+	mux.Handle("POST /api/v1/social/posts/{id}/comentarios", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.AddComment)))
 	mux.HandleFunc("POST /api/v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
 	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(issuer, users, http.HandlerFunc(authH.Me)))
+	mux.Handle("PATCH /api/v1/auth/me", handlers.RequireAuth(issuer, users, http.HandlerFunc(authH.UpdateMe)))
 	mux.Handle("GET /api/v1/admin/users", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.ListUsers))))
 	mux.Handle("PATCH /api/v1/admin/users/{id}/activate", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.ActivateUser))))
 	mux.Handle("PATCH /api/v1/admin/users/{id}/role", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.UpdateUserRole))))
@@ -363,6 +369,35 @@ func TestHandlersFullHTTPFlowAndRBAC(t *testing.T) {
 
 	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/auth/me", bidderAuth.AccessToken, nil); rec.Code != http.StatusOK {
 		t.Fatalf("/me failed: %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPatch, "/api/v1/auth/me", bidderAuth.AccessToken, map[string]string{
+		"name":     "Postor Perfil Editado",
+		"telefono": "+51 999 888 111",
+		"bio":      "Coleccionista activo en subastas verificadas",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("patch /me failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Social Feed: listar, publicar, reaccionar y comentar
+	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/social/posts", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("list social posts failed: %d", rec.Code)
+	}
+	socialCreate := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts", bidderAuth.AccessToken, map[string]string{
+		"contenido": "Esperando el inicio del proximo lote en cronograma",
+		"etiqueta":  "COMUNIDAD",
+	})
+	if socialCreate.Code != http.StatusCreated {
+		t.Fatalf("create social post failed: %d %s", socialCreate.Code, socialCreate.Body.String())
+	}
+	var createdPost domain.SocialPost
+	_ = json.Unmarshal(socialCreate.Body.Bytes(), &createdPost)
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts/"+createdPost.ID+"/like", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("like social post failed: %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts/"+createdPost.ID+"/comentarios", bidderAuth.AccessToken, map[string]string{
+		"comentario": "¡Mucho exito en la subasta!",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("comment social post failed: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/auth/refresh", "", map[string]string{"refresh_token": bidderAuth.RefreshToken}); rec.Code != http.StatusOK {
 		t.Fatalf("refresh failed: %d", rec.Code)
