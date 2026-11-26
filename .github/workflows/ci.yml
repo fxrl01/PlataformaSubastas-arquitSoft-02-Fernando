@@ -77,10 +77,40 @@ jobs:
           name: go-coverage-report
           path: tecnologia/livebid-backend/coverage.out
 
+  jest-clean-architecture-coverage:
+    name: Jest 100% Coverage & Clean Architecture Specs (TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tecnologia/boilerplate-clean-arquitecture/package-lock.json
+
+      - name: Install dependencies & run Jest with 100% global coverage threshold
+        working-directory: tecnologia/boilerplate-clean-arquitecture
+        run: |
+          npm ci
+          npm run test:coverage
+          npm run test:bids
+          npm run test:escrow
+          npm run test:server
+
+      - name: Upload Jest HTML & LCOV coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage-report
+          path: tecnologia/boilerplate-clean-arquitecture/coverage/
+
   e2e-and-load-cluster:
     name: Docker Cluster + Playwright E2E + k6 Load Test
     runs-on: ubuntu-latest
-    needs: go-unit-and-integration
+    needs: [go-unit-and-integration, jest-clean-architecture-coverage]
 
     steps:
       - name: Checkout repository
