@@ -97,7 +97,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build production Docker image for inspection
-        run: docker build -t livebid-api:trivy-scan -f ./Dockerfile .
+        run: |
+          docker build -t livebid-api:trivy-scan -f ./Dockerfile .
+          docker save livebid-api:trivy-scan -o livebid-api.tar
 
       - name: Verify container runs as non-root UID 1000
         run: |
@@ -105,14 +107,15 @@ jobs:
           echo "Container UID: $WHOAMI"
           test "$WHOAMI" = "1000"
 
-      - name: Run Aqua Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'livebid-api:trivy-scan'
-          format: 'table'
-          output: 'trivy-image-report.txt'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+      - name: Run Aqua Trivy vulnerability scanner via official GHCR image
+        run: |
+          docker run --rm \
+            -v "$PWD:/scan:ro" \
+            ghcr.io/aquasecurity/trivy:latest image \
+            --input /scan/livebid-api.tar \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --exit-code 0 > trivy-image-report.txt
 
       - name: Publish Trivy report to summary & artifacts
         run: |
