@@ -57,6 +57,27 @@ type SocialFeedRepository interface {
 	AddComment(ctx context.Context, comment SocialComment) (SocialComment, error)
 }
 
+// RoomMessage representa un mensaje breve o reacción en vivo dentro de una sala de subasta.
+type RoomMessage struct {
+	ID          string    `json:"id"`
+	AuctionID   string    `json:"subasta_id"`
+	AuthorLabel string    `json:"autor_etiqueta"`
+	Kind        string    `json:"tipo"` // CHAT o REACTION
+	Text        string    `json:"mensaje"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// RoomChatRepository persiste y consulta los mensajes de interacción en vivo de una sala.
+type RoomChatRepository interface {
+	ListRoomMessages(ctx context.Context, auctionID string, limit int) ([]RoomMessage, error)
+	SaveRoomMessage(ctx context.Context, msg RoomMessage) (RoomMessage, error)
+}
+
+// RoomSocialNotifier difunde mensajes y reacciones en tiempo real a los clientes WebSocket de la sala.
+type RoomSocialNotifier interface {
+	BroadcastEventoSocialSala(ctx context.Context, auctionID string, msg RoomMessage) error
+}
+
 type PasswordHasher interface {
 	Hash(password string) (string, error)
 	Compare(hash, password string) error

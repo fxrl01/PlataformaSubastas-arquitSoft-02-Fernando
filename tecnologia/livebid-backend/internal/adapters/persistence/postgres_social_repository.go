@@ -121,3 +121,48 @@ func (r *PostgresSocialRepository) AddComment(ctx context.Context, comment domai
 	}
 	return comment, nil
 }
+
+func (r *PostgresSocialRepository) ListRoomMessages(ctx context.Context, auctionID string, limit int) ([]domain.RoomMessage, error) {
+	if limit <= 0 || limit > 60 {
+		limit = 35
+	}
+	rows, err := r.readPool.Query(ctx, `
+		SELECT id, subasta_id, autor_etiqueta, tipo, mensaje, created_at
+		FROM sala_mensajes
+		WHERE subasta_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2`, auctionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list room messages: %w", err)
+	}
+	defer rows.Close()
+
+	var list []domain.RoomMessage
+	for rows.Next() {
+		var m domain.RoomMessage
+		if err := rows.Scan(&m.ID, &m.AuctionID, &m.AuthorLabel, &m.Kind, &m.Text, &m.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan room message: %w", err)
+		}
+		list = append(list, m)
+	}
+	// Invertir para orden cronológico ascendente en el chat de sala
+	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
+		list[i], list[j] = list[j], list[i]
+	}
+	if list == nil {
+		list = []domain.RoomMessage{}
+	}
+	return list, rows.Err()
+}
+
+func (r *PostgresSocialRepository) SaveRoomMessage(ctx context.Context, msg domain.RoomMessage) (domain.RoomMessage, error) {
+	_, err := r.writePool.Exec(ctx, `
+		INSERT INTO sala_mensajes (id, subasta_id, autor_etiqueta, tipo, mensaje, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		msg.ID, msg.AuctionID, msg.AuthorLabel, msg.Kind, msg.Text, msg.CreatedAt,
+	)
+	if err != nil {
+		return domain.RoomMessage{}, fmt.Errorf("save room message: %w", err)
+	}
+	return msg, nil
+}

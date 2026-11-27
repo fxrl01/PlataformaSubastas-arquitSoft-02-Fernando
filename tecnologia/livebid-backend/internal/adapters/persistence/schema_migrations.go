@@ -46,6 +46,16 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_social_comments_post_id ON social_comments(post_id, created_at ASC);
 
+		CREATE TABLE IF NOT EXISTS sala_mensajes (
+			id VARCHAR(64) PRIMARY KEY,
+			subasta_id VARCHAR(64) NOT NULL,
+			autor_etiqueta VARCHAR(80) NOT NULL,
+			tipo VARCHAR(20) NOT NULL DEFAULT 'CHAT',
+			mensaje VARCHAR(400) NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_sala_mensajes_subasta ON sala_mensajes(subasta_id, created_at DESC);
+
 		INSERT INTO social_posts (id, autor_id, autor_nombre, autor_rol, contenido, subasta_id, etiqueta, likes_count, created_at)
 		VALUES
 			('soc_seed_01', 'usr_admin_root', 'Casa Aureum • Curaduría', 'MARTILLERO',

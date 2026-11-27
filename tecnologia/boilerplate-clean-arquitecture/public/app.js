@@ -28,6 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // MANDATORY (viewport-aware-dropdowns): cargar polyfill de popover solo si falta soporte nativo
+  if (!Object.hasOwn(HTMLElement.prototype, 'popover')) {
+    import('https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js').catch(() => {});
+  }
+
   inicializarValidacionAccesible();
 
   // ---------------------------------------------------------------------------
@@ -67,6 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     ws: null,
     wsSubastaId: '',
     seenBidIds: new Set(),
+    seenRoomMsgIds: new Set(),
+    misSubastasOfertadas: new Set(),
+    alertasCierreEnviadas: new Set(),
+    notificaciones: [],
     aiHistory: []
   };
 
@@ -210,6 +219,130 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lotManagerDialog = document.getElementById('lotManagerDialog');
   const adminDialog = document.getElementById('adminDialog');
   const stripeDialog = document.getElementById('stripeDialog');
+  const sellerStorefrontDialog = document.getElementById('sellerStorefrontDialog');
+
+  // Centro de Notificaciones Inteligentes (Campana Superior)
+  function registrarNotificacion(texto, subastaId = '') {
+    state.notificaciones.unshift({
+      id: `ntf_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+      texto,
+      subastaId,
+      leida: false,
+      hora: new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+    });
+    if (state.notificaciones.length > 20) state.notificaciones.length = 20;
+    renderizarNotificaciones();
+  }
+
+  function renderizarNotificaciones() {
+    const badge = document.getElementById('notifUnreadBadge');
+    const list = document.getElementById('notificationsList');
+    const noLeidas = state.notificaciones.filter((n) => !n.leida).length;
+
+    if (badge) {
+      badge.textContent = String(noLeidas);
+      badge.classList.toggle('hidden', noLeidas === 0);
+    }
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (state.notificaciones.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'notif-empty-msg';
+      p.textContent = 'Te avisaremos aquí cuando una subasta guardada esté por cerrar o superen tu oferta.';
+      list.appendChild(p);
+      return;
+    }
+
+    state.notificaciones.forEach((n) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `notif-item-btn${n.leida ? '' : ' unread'}`;
+      const mainSpan = document.createElement('span');
+      mainSpan.textContent = n.texto;
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'notif-item-time';
+      timeSpan.textContent = n.hora;
+      btn.append(mainSpan, timeSpan);
+      btn.addEventListener('click', () => {
+        n.leida = true;
+        renderizarNotificaciones();
+        const pop = document.getElementById('notificationsPopover');
+        if (pop?.hidePopover) {
+          try { pop.hidePopover(); } catch (_) {}
+        }
+        if (n.subastaId) irASalaDeBien(n.subastaId);
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  document.getElementById('btnClearNotifs')?.addEventListener('click', () => {
+    state.notificaciones.forEach((n) => { n.leida = true; });
+    renderizarNotificaciones();
+  });
+
+  // Vitrina Pública de Vendedores Verificados
+  async function abrirVitrinaVendedor(sellerId) {
+    if (!sellerId || !sellerStorefrontDialog) return;
+    try {
+      const res = await fetch(`/api/v1/vendedores/${encodeURIComponent(sellerId)}/vitrina`);
+      if (!res.ok) return;
+      const v = await res.json();
+
+      document.getElementById('storefrontSellerName').textContent = v.nombre || 'Vendedor Verificado';
+      document.getElementById('storefrontInitials').textContent = inicialesDeNombre(v.nombre);
+      document.getElementById('storefrontRoleBadge').textContent = v.rol || 'VENDEDOR';
+      document.getElementById('storefrontVerifiedBadge').textContent = v.verificado ? '✓ Identidad Verificada' : 'Perfil Registrado';
+      document.getElementById('storefrontLikesStat').textContent = `❤️ ${v.reputacion_likes || 0} reacciones en comunidad`;
+      document.getElementById('storefrontBioText').textContent = v.bio || 'Consignante de bienes verificados en la plataforma.';
+
+      const aucList = document.getElementById('storefrontAuctionsList');
+      aucList.innerHTML = '';
+      const bienes = Array.isArray(v.bienes_subastados) ? v.bienes_subastados : [];
+      if (bienes.length === 0) {
+        const empty = document.createElement('p');
+        empty.style.fontSize = '0.82rem';
+        empty.style.color = 'var(--text-secondary)';
+        empty.textContent = 'Pronto publicará nuevos bienes en el cronograma.';
+        aucList.appendChild(empty);
+      } else {
+        bienes.forEach((b) => {
+          const box = document.createElement('div');
+          box.className = 'spec-box';
+          const t = document.createElement('strong');
+          t.textContent = b.titulo;
+          const p = document.createElement('span');
+          p.style.fontSize = '0.78rem';
+          p.style.color = 'var(--accent-gold)';
+          p.textContent = `S/. ${formatearNumero(b.precio_actual || b.precio_base)}`;
+          const goBtn = document.createElement('button');
+          goBtn.type = 'button';
+          goBtn.className = 'btn-pill-quick';
+          goBtn.style.marginTop = '6px';
+          goBtn.textContent = 'Entrar a esta Subasta';
+          goBtn.addEventListener('click', () => {
+            sellerStorefrontDialog.close();
+            irASalaDeBien(b.id);
+          });
+          box.append(t, p, goBtn);
+          aucList.appendChild(box);
+        });
+      }
+
+      const postsList = document.getElementById('storefrontPostsList');
+      postsList.innerHTML = '';
+      const pubs = Array.isArray(v.publicaciones) ? v.publicaciones : [];
+      pubs.slice(0, 4).forEach((pub) => {
+        const pBox = document.createElement('div');
+        pBox.className = 'room-chat-line';
+        pBox.textContent = `«${pub.contenido}» (❤️ ${pub.likes_count || 0})`;
+        postsList.appendChild(pBox);
+      });
+
+      sellerStorefrontDialog.showModal();
+    } catch (_) {}
+  }
 
   const assistantDrawerApi = inicializarDrawerAsistente();
 
@@ -369,7 +502,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       mostrarToast('Subasta retirada de tus guardados.', 'success');
     } else {
       state.watchlist.add(id);
-      mostrarToast('⭐ Subasta guardada en Mi Perfil y Ajustes.', 'success');
+      const sub = state.subastas.find((x) => x.id === id);
+      registrarNotificacion(`⭐ Guardaste "${sub?.titulo || id}" en tus recordatorios.`, id);
+      mostrarToast('⭐ Subasta guardada en Mi Perfil y Campana de Alertas.', 'success');
     }
     try {
       localStorage.setItem('livebid_watchlist', JSON.stringify([...state.watchlist]));
@@ -691,7 +826,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.precioActual = Number(ev.amount);
             state.postorLiderId = ev.bidder_id;
             state.totalPujas++;
-            const etiqueta = state.usuarioActual?.id === ev.bidder_id ? 'Tu oferta' : obtenerPaletaAnonima(ev.bidder_id);
+            const esMia = state.usuarioActual?.id === ev.bidder_id;
+            if (!esMia && state.misSubastasOfertadas.has(ev.auction_id)) {
+              registrarNotificacion(
+                `⚠️ Superaron tu oferta en "${state.subastaActual?.titulo || ev.auction_id}" (Nueva oferta: S/. ${formatearNumero(state.precioActual)}).`,
+                ev.auction_id
+              );
+            }
+            const etiqueta = esMia ? 'Tu oferta' : obtenerPaletaAnonima(ev.bidder_id);
             actualizarPreciosUI();
             if (ev.extended) dispararReglaAntiSniping();
             agregarPujaAlTimeline(Number(ev.amount), etiqueta);
@@ -702,7 +844,21 @@ document.addEventListener('DOMContentLoaded', async () => {
               state.postorLiderId = ev.winner_id;
               state.precioActual = Number(ev.amount || state.precioActual);
             }
+            if (state.watchlist.has(ev.auction_id) || state.misSubastasOfertadas.has(ev.auction_id)) {
+              registrarNotificacion(
+                `🔨 Finalizó "${state.subastaActual?.titulo || ev.auction_id}" en S/. ${formatearNumero(state.precioActual)}.`,
+                ev.auction_id
+              );
+            }
             finalizarSubastaPorTiempo();
+          } else if (ev.type === 'room.social' && ev.auction_id === state.subastaId) {
+            if (ev.id && state.seenRoomMsgIds.has(ev.id)) return;
+            if (ev.id) state.seenRoomMsgIds.add(ev.id);
+            if (ev.kind === 'REACTION') {
+              lanzarReaccionFlotante(ev.text);
+            } else {
+              agregarMensajeChatSalaUI(ev.author_label || 'Sala', ev.text);
+            }
           }
         } catch (_) {}
       });
@@ -730,10 +886,102 @@ document.addEventListener('DOMContentLoaded', async () => {
       actualizarPreciosUI();
     }
     await sincronizarGarantiaActivaBackend();
+    await cargarMensajesSala();
     conectarWebSocketSala();
     actualizarGuiaPersonalEnSala();
     actualizarContextoAsistente();
   }
+
+  async function cargarMensajesSala() {
+    state.seenRoomMsgIds.clear();
+    const box = document.getElementById('roomLiveChatList');
+    if (!box) return;
+    try {
+      const res = await fetch(`/api/v1/subastas/${encodeURIComponent(state.subastaId)}/mensajes`);
+      if (!res.ok) return;
+      const msgs = await res.json();
+      box.innerHTML = '';
+      if (!Array.isArray(msgs) || msgs.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'room-chat-empty';
+        empty.textContent = 'Saluda o comenta el lote en tiempo real con la sala.';
+        box.appendChild(empty);
+        return;
+      }
+      msgs.forEach((m) => {
+        if (m.id) state.seenRoomMsgIds.add(m.id);
+        agregarMensajeChatSalaUI(m.autor_etiqueta, m.mensaje);
+      });
+    } catch (_) {}
+  }
+
+  function agregarMensajeChatSalaUI(autor, texto) {
+    const box = document.getElementById('roomLiveChatList');
+    if (!box) return;
+    box.querySelector('.room-chat-empty')?.remove();
+    const line = document.createElement('div');
+    line.className = 'room-chat-line';
+    const st = document.createElement('strong');
+    st.textContent = `${autor}: `;
+    line.append(st, document.createTextNode(texto));
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function lanzarReaccionFlotante(emoji) {
+    const stage = document.getElementById('liveReactionStage');
+    if (!stage) return;
+    const node = document.createElement('span');
+    node.className = 'floating-reaction-emoji';
+    node.textContent = emoji;
+    node.style.left = `${18 + Math.floor(Math.random() * 64)}%`;
+    stage.appendChild(node);
+    setTimeout(() => node.remove(), 2200);
+  }
+
+  document.querySelectorAll('[data-room-reaction]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const emoji = btn.getAttribute('data-room-reaction');
+      lanzarReaccionFlotante(emoji);
+      if (!state.authToken) return;
+      try {
+        const r = await fetch(`/api/v1/subastas/${encodeURIComponent(state.subastaId)}/mensajes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.authToken}` },
+          body: JSON.stringify({ tipo: 'REACTION', mensaje: emoji })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d.id) state.seenRoomMsgIds.add(d.id);
+      } catch (_) {}
+    });
+  });
+
+  document.getElementById('roomLiveChatForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.authToken) {
+      mostrarToast('Inicia sesión para participar en el chat en vivo de la sala.', 'error');
+      cambiarTabAuth('login', false);
+      authDialog.showModal();
+      return;
+    }
+    const input = document.getElementById('roomLiveChatInput');
+    const txt = input.value.trim();
+    if (!txt) return;
+
+    const r = await fetch(`/api/v1/subastas/${encodeURIComponent(state.subastaId)}/mensajes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.authToken}` },
+      body: JSON.stringify({ tipo: 'CHAT', mensaje: txt })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) {
+      input.value = '';
+      if (d.id && !state.seenRoomMsgIds.has(d.id)) {
+        state.seenRoomMsgIds.add(d.id);
+        agregarMensajeChatSalaUI(d.autor_etiqueta || 'Tu paleta', d.mensaje || txt);
+      }
+    }
+  });
 
   function renderizarHistorialAnonimo(items, precioBase) {
     const timeline = document.getElementById('bidsTimeline');
@@ -892,6 +1140,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.tiempoSegundos > 0) {
       state.tiempoSegundos--;
       renderizarRelojInstantaneo();
+      if (state.tiempoSegundos <= 300 && state.watchlist.has(state.subastaId) && !state.alertasCierreEnviadas.has(state.subastaId)) {
+        state.alertasCierreEnviadas.add(state.subastaId);
+        registrarNotificacion(
+          `⏰ ¡Atención! Tu subasta guardada "${state.subastaActual?.titulo || state.subastaId}" está en sus últimos minutos.`,
+          state.subastaId
+        );
+      }
     } else {
       finalizarSubastaPorTiempo();
     }
@@ -976,6 +1231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         if (data.puja_id) state.seenBidIds.add(data.puja_id);
+        state.misSubastasOfertadas.add(state.subastaId);
         state.precioActual = monto;
         state.postorLiderId = state.usuarioActual.id;
         state.totalPujas++;
@@ -1088,13 +1344,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       avatar.className = 'user-avatar';
       avatar.textContent = inicialesDeNombre(p.autor_nombre || 'AU');
       const authorMeta = document.createElement('div');
-      const nameEl = document.createElement('strong');
-      nameEl.textContent = p.autor_nombre || 'Participante';
+      const nameBtn = document.createElement('button');
+      nameBtn.type = 'button';
+      nameBtn.className = 'btn-seller-link';
+      nameBtn.textContent = p.autor_nombre || 'Participante';
+      nameBtn.title = 'Ver vitrina pública y reputación';
+      nameBtn.addEventListener('click', () => abrirVitrinaVendedor(p.autor_id || 'usr_admin_root'));
       const subEl = document.createElement('div');
       subEl.style.fontSize = '0.72rem';
       subEl.style.color = 'var(--text-muted)';
       subEl.textContent = `${p.autor_rol || 'COMUNIDAD'} • ${formatearFechaCorta(p.created_at)}`;
-      authorMeta.append(nameEl, subEl);
+      authorMeta.append(nameBtn, subEl);
       authorWrap.append(avatar, authorMeta);
 
       const tagPill = document.createElement('span');
@@ -1133,7 +1393,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       likeBtn.className = 'btn-social-like';
       likeBtn.textContent = `❤️ Me interesa (${p.likes_count || 0})`;
       likeBtn.addEventListener('click', async () => {
-        const r = await fetch(`/api/v1/social/posts/${encodeURIComponent(p.id)}/like`, { method: 'POST' });
+        if (!state.authToken) {
+          mostrarToast('Inicia sesión para reaccionar a las publicaciones de la comunidad.', 'error');
+          cambiarTabAuth('login', false);
+          authDialog.showModal();
+          return;
+        }
+        const r = await fetch(`/api/v1/social/posts/${encodeURIComponent(p.id)}/like`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${state.authToken}` }
+        });
         if (r.ok) {
           const d = await r.json();
           p.likes_count = d.likes_count;

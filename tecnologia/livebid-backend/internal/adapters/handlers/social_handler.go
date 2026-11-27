@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -14,15 +15,28 @@ import (
 )
 
 type SocialHandler struct {
-	repo  domain.SocialFeedRepository
-	users domain.UserRepository
+	repo         domain.SocialFeedRepository
+	roomChatRepo domain.RoomChatRepository
+	users        domain.UserRepository
+	auctions     domain.SubastaRepository
+	notifier     domain.RoomSocialNotifier
 }
 
 func NewSocialHandler(repo domain.SocialFeedRepository, users domain.UserRepository) *SocialHandler {
 	if repo == nil {
 		repo = NewMemorySocialRepository()
 	}
-	return &SocialHandler{repo: repo, users: users}
+	h := &SocialHandler{repo: repo, users: users}
+	if rc, ok := repo.(domain.RoomChatRepository); ok {
+		h.roomChatRepo = rc
+	}
+	return h
+}
+
+func (h *SocialHandler) WithRoomRealtime(auctions domain.SubastaRepository, notifier domain.RoomSocialNotifier) *SocialHandler {
+	h.auctions = auctions
+	h.notifier = notifier
+	return h
 }
 
 type createSocialPostRequest struct {
@@ -34,6 +48,25 @@ type createSocialPostRequest struct {
 
 type createSocialCommentRequest struct {
 	Text string `json:"comentario"`
+}
+
+type createRoomMessageRequest struct {
+	Kind string `json:"tipo,omitempty"`
+	Text string `json:"mensaje"`
+}
+
+// SellerStorefrontView expone únicamente datos públicos y de reputación de un vendedor/curador,
+// omitiendo correo, teléfono, documento de identidad y dirección de billetera privada.
+type SellerStorefrontView struct {
+	ID              string              `json:"id"`
+	Name            string              `json:"nombre"`
+	Role            domain.UserRole     `json:"rol"`
+	Verified        bool                `json:"verificado"`
+	Bio             string              `json:"bio"`
+	MemberSince     time.Time           `json:"miembro_desde"`
+	TotalLikes      int                 `json:"reputacion_likes"`
+	PublishedPosts  []domain.SocialPost `json:"publicaciones"`
+	RelatedAuctions []*domain.Subasta   `json:"bienes_subastados"`
 }
 
 func (h *SocialHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +131,10 @@ func (h *SocialHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SocialHandler) LikePost(w http.ResponseWriter, r *http.Request) {
+	if _, ok := CurrentUser(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
 	postID := strings.TrimSpace(r.PathValue("id"))
 	if postID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "post id required"})
@@ -153,6 +190,163 @@ func (h *SocialHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
+// GetSellerStorefront devuelve la vitrina pública sanitizada de un vendedor, martillero o curador.
+func (h *SocialHandler) GetSellerStorefront(w http.ResponseWriter, r *http.Request) {
+	sellerID := strings.TrimSpace(r.PathValue("id"))
+	if sellerID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "seller id required"})
+		return
+	}
+
+	view := SellerStorefrontView{
+		ID:              sellerID,
+		Name:            "Vendedor Verificado Aureum",
+		Role:            domain.RoleSeller,
+		Verified:        true,
+		Bio:             "Consignante acreditado de bienes y piezas de colección.",
+		MemberSince:     time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		PublishedPosts:  []domain.SocialPost{},
+		RelatedAuctions: []*domain.Subasta{},
+	}
+
+	if h.users != nil {
+		if u, err := h.users.FindByID(r.Context(), sellerID); err == nil && u != nil {
+			view.Name = u.Name
+			view.Role = u.Role
+			view.Verified = u.KYCApproved
+			if strings.TrimSpace(u.Bio) != "" {
+				view.Bio = u.Bio
+			}
+			if !u.CreatedAt.IsZero() {
+				view.MemberSince = u.CreatedAt
+			}
+		}
+	}
+
+	linkedAuctionIDs := make(map[string]bool)
+	if allPosts, err := h.repo.ListPosts(r.Context(), 50); err == nil {
+		for _, p := range allPosts {
+			if p.AuthorID == sellerID {
+				if view.Name == "Vendedor Verificado Aureum" && p.AuthorName != "" {
+					view.Name = p.AuthorName
+					view.Role = p.AuthorRole
+				}
+				view.PublishedPosts = append(view.PublishedPosts, p)
+				view.TotalLikes += p.LikesCount
+				if p.AuctionID != "" {
+					linkedAuctionIDs[p.AuctionID] = true
+				}
+			}
+		}
+	}
+
+	if h.auctions != nil {
+		if allAuctions, err := h.auctions.Listar(r.Context()); err == nil {
+			lowerName := strings.ToLower(view.Name)
+			for _, sub := range allAuctions {
+				inspector := strings.ToLower(sub.DetallesLote.InspeccionadoPor)
+				if linkedAuctionIDs[sub.ID] || sub.MartilleroID == sellerID || (lowerName != "" && strings.Contains(inspector, lowerName)) {
+					view.RelatedAuctions = append(view.RelatedAuctions, sub)
+				}
+			}
+			// Si es una cuenta semilla de curaduría sin coincidencia directa, mostrar el primer lote activo de referencia
+			if len(view.RelatedAuctions) == 0 && len(allAuctions) > 0 && strings.HasPrefix(sellerID, "usr_seed") {
+				view.RelatedAuctions = append(view.RelatedAuctions, allAuctions[0])
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, view)
+}
+
+// ListRoomMessages devuelve el historial reciente del chat en vivo de la sala.
+func (h *SocialHandler) ListRoomMessages(w http.ResponseWriter, r *http.Request) {
+	auctionID := strings.TrimSpace(r.PathValue("id"))
+	if auctionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auction id required"})
+		return
+	}
+	if h.roomChatRepo == nil {
+		writeJSON(w, http.StatusOK, []domain.RoomMessage{})
+		return
+	}
+	msgs, err := h.roomChatRepo.ListRoomMessages(r.Context(), auctionID, 35)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load room messages"})
+		return
+	}
+	writeJSON(w, http.StatusOK, msgs)
+}
+
+// PostRoomMessage registra un mensaje o reacción rápida en la sala y lo transmite por WebSocket.
+func (h *SocialHandler) PostRoomMessage(w http.ResponseWriter, r *http.Request) {
+	authUser, ok := CurrentUser(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
+	auctionID := strings.TrimSpace(r.PathValue("id"))
+	if auctionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "auction id required"})
+		return
+	}
+	var req createRoomMessageRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	kind := strings.ToUpper(strings.TrimSpace(req.Kind))
+	if kind == "" {
+		kind = "CHAT"
+	}
+	if kind != "CHAT" && kind != "REACTION" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid message kind"})
+		return
+	}
+
+	txt := strings.TrimSpace(req.Text)
+	if txt == "" || len(txt) > 280 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "message text required (max 280 chars)"})
+		return
+	}
+
+	label := paddleLabelForUser(authUser.ID, authUser.Role)
+	msg := domain.RoomMessage{
+		ID:          randomSocialID("rm_"),
+		AuctionID:   auctionID,
+		AuthorLabel: label,
+		Kind:        kind,
+		Text:        txt,
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if kind == "CHAT" && h.roomChatRepo != nil {
+		saved, err := h.roomChatRepo.SaveRoomMessage(r.Context(), msg)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save room message"})
+			return
+		}
+		msg = saved
+	}
+
+	if h.notifier != nil {
+		_ = h.notifier.BroadcastEventoSocialSala(r.Context(), auctionID, msg)
+	}
+
+	writeJSON(w, http.StatusCreated, msg)
+}
+
+func paddleLabelForUser(userID string, role domain.UserRole) string {
+	if role == domain.RoleAuctioneer || role == domain.RoleAdmin {
+		return "Martillero en Sala"
+	}
+	h := 0
+	for i := 0; i < len(userID); i++ {
+		h = (h*31 + int(userID[i])) % 900
+	}
+	return fmt.Sprintf("Paleta #%d", 100+h)
+}
+
 func randomSocialID(prefix string) string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
@@ -161,8 +355,9 @@ func randomSocialID(prefix string) string {
 
 // MemorySocialRepository ofrece almacenamiento en memoria seguro para pruebas unitarias.
 type MemorySocialRepository struct {
-	mu    sync.Mutex
-	posts []domain.SocialPost
+	mu       sync.Mutex
+	posts    []domain.SocialPost
+	roomMsgs map[string][]domain.RoomMessage
 }
 
 func NewMemorySocialRepository() *MemorySocialRepository {
@@ -180,6 +375,7 @@ func NewMemorySocialRepository() *MemorySocialRepository {
 				Comments:   []domain.SocialComment{},
 			},
 		},
+		roomMsgs: make(map[string][]domain.RoomMessage),
 	}
 }
 
@@ -220,4 +416,20 @@ func (m *MemorySocialRepository) AddComment(_ context.Context, c domain.SocialCo
 		}
 	}
 	return domain.SocialComment{}, domain.ErrSubastaNoEncontrada
+}
+
+func (m *MemorySocialRepository) ListRoomMessages(_ context.Context, auctionID string, _ int) ([]domain.RoomMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	src := m.roomMsgs[auctionID]
+	out := make([]domain.RoomMessage, len(src))
+	copy(out, src)
+	return out, nil
+}
+
+func (m *MemorySocialRepository) SaveRoomMessage(_ context.Context, msg domain.RoomMessage) (domain.RoomMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.roomMsgs[msg.AuctionID] = append(m.roomMsgs[msg.AuctionID], msg)
+	return msg, nil
 }

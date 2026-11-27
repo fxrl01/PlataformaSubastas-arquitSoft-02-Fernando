@@ -20,7 +20,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=20261126-v3">
+  <link rel="stylesheet" href="/styles.css?v=20261126-v4">
 </head>
 
 <body>
@@ -69,6 +69,24 @@
             <span aria-hidden="true">🛡️</span> Administración
             <span id="adminRoleIndicator" class="sr-only">ADMIN</span>
           </button>
+
+          <!-- Campana Superior de Notificaciones (Popover API + CSS Anchor Positioning) -->
+          <button type="button" class="btn-nav-module btn-notif-bell" id="btnNotificationsBell"
+            popovertarget="notificationsPopover" title="Ver tus alertas de cierre y ofertas superadas">
+            <span aria-hidden="true">🔔</span>
+            <span>Alertas</span>
+            <span class="notif-count-dot hidden" id="notifUnreadBadge">0</span>
+          </button>
+
+          <div id="notificationsPopover" popover="auto" class="notifications-panel anchored-overlay">
+            <div class="notif-panel-header">
+              <strong>🔔 Tus Notificaciones</strong>
+              <button type="button" class="btn-link-gold" id="btnClearNotifs">Marcar leídas</button>
+            </div>
+            <div class="notif-items-list" id="notificationsList">
+              <p class="notif-empty-msg">Te avisaremos aquí cuando una subasta guardada esté por cerrar o superen tu oferta.</p>
+            </div>
+          </div>
 
           <!-- Botón de cambio rápido Modo Claro / Modo Oscuro -->
           <button type="button" class="btn-nav-module btn-theme-toggle" id="btnThemeToggle"
@@ -204,6 +222,8 @@
             <button type="button" class="btn-upload-overlay hidden" id="btnQuickUploadImage">
               📷 Cambiar Fotografía
             </button>
+
+            <div class="live-reactions-stage" id="liveReactionStage" aria-hidden="true"></div>
 
             <div class="media-overlay">
               <span id="lotCertLinkWrap">TASACIÓN Y AUTENTICIDAD VERIFICADAS</span>
@@ -361,6 +381,32 @@
           </div>
 
           <div class="bids-timeline" id="bidsTimeline"></div>
+        </div>
+
+        <!-- REACCIONES Y CHAT EN VIVO POR WEBSOCKET EN LA SALA -->
+        <div class="room-live-chat-box" id="liveRoomSocialBox">
+          <div class="feed-header">
+            <h3>💬 Chat y Reacciones en Vivo</h3>
+            <span class="feed-badge">EN DIRECTO</span>
+          </div>
+
+          <div class="room-reactions-bar" role="group" aria-label="Enviar reacción en vivo a la sala">
+            <button type="button" class="btn-room-reaction" data-room-reaction="🔥" title="¡Qué gran lote!">🔥</button>
+            <button type="button" class="btn-room-reaction" data-room-reaction="👏" title="Aplaudir oferta">👏</button>
+            <button type="button" class="btn-room-reaction" data-room-reaction="💎" title="Joya de colección">💎</button>
+            <button type="button" class="btn-room-reaction" data-room-reaction="🎉" title="Celebrar">🎉</button>
+          </div>
+
+          <div class="room-chat-messages" id="roomLiveChatList" role="log" aria-live="polite">
+            <p class="room-chat-empty">Saluda o comenta el lote en tiempo real con la sala.</p>
+          </div>
+
+          <form id="roomLiveChatForm" class="room-chat-form">
+            <label for="roomLiveChatInput" class="sr-only">Mensaje para la sala en vivo</label>
+            <input type="text" id="roomLiveChatInput" maxlength="240" required
+              placeholder="Comentar en vivo en la sala...">
+            <button type="submit" class="btn-pill-quick btn-accent-solid" id="btnSendRoomChat">Enviar</button>
+          </form>
         </div>
 
         <!-- ESTRADO DEL MARTILLERO (OCULTO PARA USUARIOS NORMALES) -->
@@ -1133,7 +1179,46 @@
     </form>
   </dialog>
 
-  <script src="/app.js?v=20261126-v3"></script>
+  <!-- =========================================================================
+       MODAL 5: VITRINA PÚBLICA DE VENDEDORES Y CURADORES VERIFICADOS
+       ========================================================================= -->
+  <dialog id="sellerStorefrontDialog" class="luxury-dialog dialog-wide" closedby="any" aria-labelledby="storefrontSellerName">
+    <div class="dialog-header">
+      <div>
+        <span class="dialog-eyebrow">PERFIL PÚBLICO Y REPUTACIÓN</span>
+        <h2 id="storefrontSellerName">Vitrina del Vendedor</h2>
+      </div>
+      <form method="dialog">
+        <button type="submit" class="btn-close-dialog" aria-label="Cerrar vitrina del vendedor">✕</button>
+      </form>
+    </div>
+
+    <div class="dialog-form storefront-body">
+      <div class="storefront-hero-box">
+        <div class="profile-avatar-lg" id="storefrontInitials">VD</div>
+        <div class="storefront-hero-info">
+          <div class="storefront-badges">
+            <span class="tier-pill" id="storefrontRoleBadge">VENDEDOR</span>
+            <span class="verified-badge" id="storefrontVerifiedBadge">✓ Identidad Verificada</span>
+            <span class="feed-badge" id="storefrontLikesStat">❤️ 0 reacciones</span>
+          </div>
+          <p class="storefront-bio" id="storefrontBioText"></p>
+        </div>
+      </div>
+
+      <div>
+        <span class="section-eyebrow">BIENES VINCULADOS Y SUBASTAS</span>
+        <div id="storefrontAuctionsList" class="watchlist-list"></div>
+      </div>
+
+      <div>
+        <span class="section-eyebrow">PUBLICACIONES EN LA COMUNIDAD</span>
+        <div id="storefrontPostsList" class="storefront-posts-list"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/app.js?v=20261126-v4"></script>
 </body>
 
 </html>

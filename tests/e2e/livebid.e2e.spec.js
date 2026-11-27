@@ -37,8 +37,14 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
       }
     });
     expect(aiAssistantRes.ok()).toBeTruthy();
+    expect(aiAssistantRes.headers()['x-content-type-options']).toBe('nosniff');
     const aiBody = await aiAssistantRes.json();
     expect(aiBody.respuesta).toContain('Vendedor');
+
+    const storefrontRes = await request.get('/api/v1/vendedores/usr_admin_root/vitrina');
+    expect(storefrontRes.ok()).toBeTruthy();
+    const storefrontText = await storefrontRes.text();
+    expect(storefrontText).not.toContain('admin@livebid.pe');
   });
 
   test('Flujo E2E completo con 2 navegadores: Registro -> KYC Admin -> Nueva Subasta -> Stripe Hold -> Puja WS -> Cierre y Merkle', async ({ browser, request }) => {
@@ -64,9 +70,17 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
       await bidderPage.locator('[data-nav-view="catalogo"]').click();
       await expect(bidderPage.locator('#catalogGrid article.catalog-card').first()).toBeVisible({ timeout: 10_000 });
 
-      // Verificar sección abierta de Social Feed desde PostgreSQL
+      // Verificar sección abierta de Social Feed y apertura de Vitrina Pública de Vendedor
       await bidderPage.locator('[data-nav-view="social"]').click();
       await expect(bidderPage.locator('#socialFeedList article.social-post-card').first()).toBeVisible({ timeout: 10_000 });
+      await bidderPage.locator('#socialFeedList .btn-seller-link').first().click();
+      await expect(bidderPage.locator('#sellerStorefrontDialog')).toBeVisible();
+      await bidderPage.locator('#sellerStorefrontDialog .btn-close-dialog').click();
+
+      // Verificar Campana Superior de Alertas
+      await bidderPage.locator('#btnNotificationsBell').click();
+      await expect(bidderPage.locator('#notificationsPopover')).toBeVisible();
+      await bidderPage.locator('#btnNotificationsBell').click();
 
       // Verificar Asistente IA dinámico
       await bidderPage.locator('#btnOpenAiDrawer').click();
@@ -136,8 +150,12 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
       await expect(bidderPage.locator('#currentPriceValue')).not.toHaveText('20,000', { timeout: 10_000 });
       expect(Number(minBidVal)).toBeGreaterThan(20000);
 
-      // 5. Verificar sincronización en tiempo real vía WebSocket en el navegador del Admin
+      // 5. Verificar sincronización en tiempo real vía WebSocket (oferta + chat en vivo de sala) en el navegador del Admin
       await expect(adminPage.locator('#totalBidsCount')).toContainText('1 oferta', { timeout: 10_000 });
+
+      await bidderPage.locator('#roomLiveChatInput').fill('¡Excelente lote en sala!');
+      await bidderPage.locator('#btnSendRoomChat').click();
+      await expect(adminPage.locator('#roomLiveChatList')).toContainText('¡Excelente lote en sala!', { timeout: 10_000 });
 
       // 6. Admin inicia conteo de martillo y cierra la subasta
       await adminPage.locator('#btnMartilloConteo').click();

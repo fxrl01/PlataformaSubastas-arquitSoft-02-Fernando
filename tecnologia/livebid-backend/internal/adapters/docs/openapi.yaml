@@ -227,7 +227,9 @@ paths:
     post:
       tags:
         - M2 - Catalogo, Lotes & Ciclo de Vida
-      summary: Registrar reaccion de interes en una publicacion del Social Feed
+      summary: Registrar reaccion de interes en una publicacion del Social Feed (autenticado)
+      security:
+        - BearerAuth: []
       operationId: likeSocialPost
       parameters:
         - name: id
@@ -248,8 +250,32 @@ paths:
                     type: string
                   likes_count:
                     type: integer
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
         "404":
           $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/vendedores/{id}/vitrina:
+    get:
+      tags:
+        - M2 - Catalogo, Lotes & Ciclo de Vida
+      summary: Consultar vitrina publica sanitizada de un vendedor o martillero verificado
+      description: Devuelve nombre, perfil, estado de verificacion, biografia, reputacion en comunidad y bienes consignados, sin exponer datos privados (correo, DNI, telefono ni billetera).
+      operationId: getSellerStorefront
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del vendedor o autor (`usr_...`)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vitrina publica del vendedor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SellerStorefrontView"
 
   /api/v1/social/posts/{id}/comentarios:
     post:
@@ -1017,6 +1043,50 @@ paths:
                 $ref: "#/components/schemas/AssistantReply"
         "400":
           $ref: "#/components/responses/BadRequestError"
+
+  /api/v1/subastas/{id}/mensajes:
+    get:
+      tags:
+        - M4 - Motor de Pujas, Historial & WebSocket
+      summary: Listar mensajes recientes del chat en vivo de la sala
+      operationId: listAuctionRoomMessages
+      parameters:
+        - $ref: "#/components/parameters/AuctionIdParam"
+      responses:
+        "200":
+          description: Historial reciente de mensajes con paletas anonimas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoomMessage"
+    post:
+      tags:
+        - M4 - Motor de Pujas, Historial & WebSocket
+      summary: Enviar mensaje breve o reaccion instantanea a la sala en vivo (WebSocket broadcast)
+      security:
+        - BearerAuth: []
+      operationId: postAuctionRoomMessage
+      parameters:
+        - $ref: "#/components/parameters/AuctionIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomMessageRequest"
+      responses:
+        "201":
+          description: Mensaje o reaccion emitido a la sala por Redis Pub/Sub y WebSocket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomMessage"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
 
   /api/v1/subastas/{id}/inteligencia-ia:
     get:
@@ -2099,3 +2169,62 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SocialComment"
+
+    SellerStorefrontView:
+      type: object
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        rol:
+          $ref: "#/components/schemas/UserRole"
+        verificado:
+          type: boolean
+        bio:
+          type: string
+        miembro_desde:
+          type: string
+          format: date-time
+        reputacion_likes:
+          type: integer
+        publicaciones:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialPost"
+        bienes_subastados:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuctionView"
+
+    CreateRoomMessageRequest:
+      type: object
+      required: [mensaje]
+      properties:
+        tipo:
+          type: string
+          enum: [CHAT, REACTION]
+          example: CHAT
+        mensaje:
+          type: string
+          maxLength: 280
+          example: ¡Excelente estado de conservacion!
+
+    RoomMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        subasta_id:
+          type: string
+        autor_etiqueta:
+          type: string
+          example: Paleta #241
+        tipo:
+          type: string
+          enum: [CHAT, REACTION]
+        mensaje:
+          type: string
+        created_at:
+          type: string
+          format: date-time
