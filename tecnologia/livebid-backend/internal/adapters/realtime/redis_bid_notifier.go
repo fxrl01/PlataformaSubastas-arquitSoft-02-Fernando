@@ -28,6 +28,16 @@ type AuctionClosedEvent struct {
 	ClosedAt  time.Time `json:"closed_at"`
 }
 
+type RoomSocialEvent struct {
+	Type        string    `json:"type"`
+	AuctionID   string    `json:"auction_id"`
+	ID          string    `json:"id"`
+	AuthorLabel string    `json:"author_label"`
+	Kind        string    `json:"kind"`
+	Text        string    `json:"text"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type RedisBidNotifier struct {
 	client *redis.Client
 	prefix string
@@ -65,6 +75,28 @@ func (n *RedisBidNotifier) BroadcastSubastaCerrada(ctx context.Context, auctionI
 	}
 	if err := n.client.Publish(ctx, n.prefix+auctionID, payload).Err(); err != nil {
 		return fmt.Errorf("publish auction closure event: %w", err)
+	}
+	return nil
+}
+
+func (n *RedisBidNotifier) BroadcastEventoSocialSala(ctx context.Context, auctionID string, msg domain.RoomMessage) error {
+	if n == nil || n.client == nil {
+		return nil
+	}
+	payload, err := json.Marshal(RoomSocialEvent{
+		Type:        "room.social",
+		AuctionID:   auctionID,
+		ID:          msg.ID,
+		AuthorLabel: msg.AuthorLabel,
+		Kind:        msg.Kind,
+		Text:        msg.Text,
+		CreatedAt:   msg.CreatedAt,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal room social event: %w", err)
+	}
+	if err := n.client.Publish(ctx, n.prefix+auctionID, payload).Err(); err != nil {
+		return fmt.Errorf("publish room social event: %w", err)
 	}
 	return nil
 }

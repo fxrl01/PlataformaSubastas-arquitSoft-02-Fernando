@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 func main() {
 	log.Println("=================================================================")
 	log.Println(" LIVEBID — REALTIME CORE ENGINE (Go 1.23+ Clean Architecture)")
-	log.Println(" Optimizado para AWS Free Tier (< 30 MB RAM, Latencia < 5ms)")
+	log.Println(" Optimizado para Microsoft Azure + Cloudflare Edge (2,000+ Usuarios, < 30 MB RAM)")
 	log.Println("=================================================================")
 
 	// 1. Conexión a PostgreSQL (Pool configurado + soporte Read Replica) y migración idempotente de esquema
@@ -70,8 +71,12 @@ func main() {
 		rCancel()
 	}
 
-	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub + Caché Distribuida)
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr(os.Getenv("REDIS_URL"))})
+	// 2. Conexión a Redis (Locks Atómicos + Pub/Sub + Caché Distribuida, Pool alta concurrencia)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:         redisAddr(os.Getenv("REDIS_URL")),
+		PoolSize:     envInt("REDIS_POOL_SIZE", 128),
+		MinIdleConns: envInt("REDIS_MIN_IDLE_CONNS", 16),
+	})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("ping redis: %v", err)
@@ -105,6 +110,7 @@ func main() {
 	failThreshold := envInt("CIRCUIT_BREAKER_FAIL_THRESHOLD", 3)
 	cbTimeout := time.Duration(envInt("CIRCUIT_BREAKER_TIMEOUT_MS", 2000)) * time.Millisecond
 	geminiProvider := ai.NewGeminiRiskAdapter(os.Getenv("GEMINI_API_KEY"))
+	geminiAssistant := ai.NewGeminiAssistant(os.Getenv("GEMINI_API_KEY"))
 	riskBreaker := ai.NewCircuitBreakerIA(geminiProvider, failThreshold, 3*time.Second, cbTimeout)
 
 	aiRouter := ai.NewMultiModelRouter("gemini-2.5-flash", riskBreaker, time.Minute)
@@ -122,16 +128,19 @@ func main() {
 	)
 	guaranteeRepository.WithPaymentGateway(stripeGateway)
 
-	// 5. Servicios de Aplicación y Bootstrap Automático de Administrador
+	// 5. Servicios de Aplicación y Bootstrap Seguro de Administrador
 	authService := services.NewAuthService(
 		userRepository,
 		security.NewBcryptHasher(12),
 		jwtIssuer,
 		persistence.NewPostgresRefreshTokenStore(pool),
 	)
+	appEnv := strings.ToLower(strings.TrimSpace(envStr("APP_ENV", "development")))
 	adminEmail := envStr("ADMIN_BOOTSTRAP_EMAIL", "admin@livebid.pe")
 	adminPass := envStr("ADMIN_BOOTSTRAP_PASSWORD", "AdminLiveBid2026!")
-	if adminView, err := authService.BootstrapAdmin(context.Background(), "Administrador General LiveBid", adminEmail, adminPass); err != nil {
+	if appEnv == "production" && adminPass == "AdminLiveBid2026!" {
+		log.Println("SEGURIDAD: APP_ENV=production detectado con contraseña demo por defecto; se omite bootstrap automático hasta definir ADMIN_BOOTSTRAP_PASSWORD fuerte.")
+	} else if adminView, err := authService.BootstrapAdmin(context.Background(), "Administrador General LiveBid", adminEmail, adminPass); err != nil {
 		log.Printf("advertencia en bootstrap de admin: %v", err)
 	} else {
 		log.Printf("Cuenta ADMIN verificada y activa: %s (ID: %s)", adminView.Email, adminView.ID)
@@ -161,8 +170,15 @@ func main() {
 	bidHandler := handlers.NewBidHandler(bidService)
 	bidHistoryHandler := handlers.NewBidHistoryHandler(bidHistoryService)
 	guaranteeHandler := handlers.NewGuaranteeHandler(guaranteeService)
-	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector)
+	agentAIHandler := handlers.NewAgentAIHandler(agentDelegationService, aiRouter, riskBreaker, fraudDetector).
+		WithAssistant(geminiAssistant, auctionRepository)
+	socialRepo := persistence.NewPostgresSocialRepository(pool, readPool)
+	socialHandler := handlers.NewSocialHandler(socialRepo, userRepository).
+		WithRoomRealtime(auctionRepository, bidNotifier)
 	webSocketHandler := realtime.NewWebSocketHandler(jwtIssuer, userRepository, auctionRepository, redisClient)
+
+	authLimiter := security.NewIPRateLimiter(envInt("AUTH_RATE_LIMIT_PER_MIN", 90), time.Minute)
+	aiLimiter := security.NewIPRateLimiter(envInt("AI_RATE_LIMIT_PER_MIN", 60), time.Minute)
 
 	// 6. Router HTTP estándar de Go
 	mux := http.NewServeMux()
@@ -175,6 +191,10 @@ func main() {
 		mux.Handle("GET /index.html", fileServer)
 		mux.Handle("GET /styles.css", fileServer)
 		mux.Handle("GET /app.js", fileServer)
+		mux.Handle("GET /favicon.svg", fileServer)
+		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/favicon.svg", http.StatusMovedPermanently)
+		})
 	}
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -186,14 +206,28 @@ func main() {
 		_, _ = w.Write([]byte(resp))
 	})
 
-	// Documentación Interactiva OpenAPI 3.0 / Swagger UI
-	handlers.RegisterSwaggerRoutes(mux)
+	// Documentación Interactiva OpenAPI 3.0 / Swagger UI (desactivada por defecto en producción salvo SWAGGER_ENABLED=true)
+	defaultSwagger := "true"
+	if appEnv == "production" {
+		defaultSwagger = "false"
+	}
+	if strings.EqualFold(envStr("SWAGGER_ENABLED", defaultSwagger), "true") {
+		handlers.RegisterSwaggerRoutes(mux)
+	}
 
-	// Autenticación y Perfil
-	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
-	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
-	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+	// Autenticación y Perfil (protegidos con Rate Limiter contra fuerza bruta)
+	mux.HandleFunc("POST /api/v1/auth/register", authLimiter.Wrap(authHandler.Register))
+	mux.HandleFunc("POST /api/v1/auth/login", authLimiter.Wrap(authHandler.Login))
+	mux.HandleFunc("POST /api/v1/auth/refresh", authLimiter.Wrap(authHandler.Refresh))
 	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.Me)))
+	mux.Handle("PATCH /api/v1/auth/me", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(authHandler.UpdateMe)))
+
+	// Muro Social Abierto y Vitrina Pública Sanitizada de Vendedores
+	mux.HandleFunc("GET /api/v1/social/posts", socialHandler.ListPosts)
+	mux.Handle("POST /api/v1/social/posts", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.CreatePost)))
+	mux.Handle("POST /api/v1/social/posts/{id}/like", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.LikePost)))
+	mux.Handle("POST /api/v1/social/posts/{id}/comentarios", handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.AddComment)))
+	mux.HandleFunc("GET /api/v1/vendedores/{id}/vitrina", socialHandler.GetSellerStorefront)
 
 	// Gobernanza RBAC y Administración de Usuarios (Rol ADMIN)
 	mux.Handle("GET /api/v1/admin/users",
@@ -218,6 +252,10 @@ func main() {
 	mux.HandleFunc("GET /api/v1/subastas/{id}/pujas", bidHistoryHandler.List)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/auditoria-web3", auctionHandler.AuditWeb3)
 	mux.HandleFunc("GET /api/v1/subastas/{id}/inteligencia-ia", agentAIHandler.IntelligenceReport)
+	mux.HandleFunc("POST /api/v1/ia/asistente", aiLimiter.Wrap(agentAIHandler.AssistantChat))
+	mux.HandleFunc("GET /api/v1/subastas/{id}/mensajes", socialHandler.ListRoomMessages)
+	mux.Handle("POST /api/v1/subastas/{id}/mensajes",
+		handlers.RequireAuth(jwtIssuer, userRepository, http.HandlerFunc(socialHandler.PostRoomMessage)))
 	mux.Handle("POST /api/v1/subastas",
 		handlers.RequireAuth(jwtIssuer, userRepository,
 			handlers.RequireRoles(domain.RoleSeller, domain.RoleAuctioneer, domain.RoleAdmin)(http.HandlerFunc(auctionHandler.Create))))
@@ -274,10 +312,12 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      withCORS(mux),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:              ":" + port,
+		Handler:           security.WithSecurityHeadersAndBodyLimit(mux, instanceID, os.Getenv("CORS_ALLOWED_ORIGIN"), 2<<20),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// 7. Reconciliación inicial y Scheduler de Cierre Automático
@@ -316,17 +356,7 @@ func main() {
 
 func withCORS(next http.Handler) http.Handler {
 	instanceID := envStr("INSTANCE_ID", "livebid-api-primary")
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-LiveBid-Instance", instanceID)
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, Stripe-Signature, X-Web3-Wallet, X-Web3-Signature, X-Web3-Nonce, X-Web3-Deadline, X-AI-Agent-Mandate")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	return security.WithSecurityHeadersAndBodyLimit(next, instanceID, os.Getenv("CORS_ALLOWED_ORIGIN"), 2<<20)
 }
 
 func withStaticCache(next http.Handler) http.Handler {

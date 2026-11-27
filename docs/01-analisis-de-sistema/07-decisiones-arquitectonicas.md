@@ -29,6 +29,7 @@ Un **ADR (*Architecture Decision Record*)** documenta las decisiones técnicas e
 | **ADR-012** | Capa Web3 Trustless: Verificación EIP-712, Árbol de Merkle y Smart Contract Escrow | DA02 — Integridad; DA04 — Custodia | Dotar a la plataforma de auditabilidad matemática descentralizada: cada puja puede llevar firma tipada EIP-712, el historial genera una `MerkleRoot` verificable en $O(\log_2 N)$ y la liquidación emite un recibo on-chain. | `domain/web3.go`, `adapters/web3/eip712_verifier.go`, `adapters/web3/evm_escrow_adapter.go` y `services/web3_audit_service.go`. |
 | **ADR-013** | Capa de IA Exponencial: `MultiModelRouter` (Hot-Swap), Radar Asíncrono y Agentes Autónomos | DA06 — Seguridad; DA07 — IA Exponencial | Permitir cambiar de modelo LLM en caliente sin reiniciar el binario, detectar *Wash Trading*/*Shill Bidding* en un worker asíncrono no bloqueante y habilitar pujas delegadas a Agentes IA con techo `max_cap`. | `adapters/ai/multi_model_router.go`, `anomaly_detector.go`, `domain/ai_agent.go` y `services/agent_delegation_service.go`. |
 | **ADR-014** | Gobernanza RBAC con Caché Reactivo (`CachedUserRepository`) y Ficha de Encargado/Lote | DA03 — Rendimiento; DA08 — Gobernanza | Validar estado y rol (`POSTOR`, `VENDEDOR`, `MARTILLERO`, `ADMIN`) en $< 0.05\text{ ms}$ desde caché en memoria con invalidación instantánea al actualizar permisos, e incorporar la ficha legal del `EncargadoSubasta` y `DetallesLote`. | `CachedUserRepository` (`cached_user_repository.go`), `AuthHandler` y extensión de `Subasta`. |
+| **ADR-015** | Despliegue Cloud en Microsoft Azure (`Standard_B2s`) + Cloudflare Edge (`HTTPS`/`WSS`) para `2,000+` Usuarios | DA01 — Escalabilidad; DA03 — Rendimiento | Aprovechar el crédito predecible de **Azure for Students (\$100 USD)** sin sobrecargos ocultos por IPv4 pública, protegiendo el borde con **Cloudflare CDN/WSS** y afinando descriptores TCP (`nofile=65535`, `worker_connections=16384`, `PgBouncer MAX_CLIENT_CONN=2500`, keepalive ping WS cada `30 s`). | `docker-compose.yml`, `docker/nginx/nginx.conf`, `websocket_handler.go` y perfiles `scale2000` / `stress5000` en `tests/load/livebid-load.js`. |
 
 ---
 
@@ -39,6 +40,7 @@ flowchart LR
     DA01["DA01 Escalabilidad"] --> ADR001["ADR-001 Redis Pub/Sub"]
     DA01 --> ADR007["ADR-007 AuctionRoomHub O(1)"]
     DA01 --> ADR009["ADR-009 Go 1.23+ Engine"]
+    DA01 --> ADR015["ADR-015 Azure + Cloudflare 2000+ VUs"]
 
     DA02["DA02 Integridad & Orden"] --> ADR003["ADR-003 Lock Redis + FOR UPDATE"]
     DA02 --> ADR006["ADR-006 Tramos + Anti-Sniping"]

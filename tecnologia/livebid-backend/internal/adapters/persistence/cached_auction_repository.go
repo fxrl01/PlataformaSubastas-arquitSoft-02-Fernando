@@ -8,6 +8,7 @@ import (
 
 	"github.com/fxrl01/livebid-backend/internal/core/domain"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -53,12 +54,13 @@ func (c *RedisDistributedCache) Del(ctx context.Context, keys ...string) error {
 	return c.client.Del(ctx, keys...).Err()
 }
 
-// CachedAuctionRepository aplica el patrón Cache-Aside distribuido en Redis
-// sobre un domain.SubastaRepository, degradando con seguridad a PostgreSQL ante fallos de Redis.
+// CachedAuctionRepository aplica el patrón Cache-Aside distribuido en Redis con coalescencia singleflight
+// (anti Cache Stampede / Thundering Herd) sobre un domain.SubastaRepository, degradando a PostgreSQL ante fallos.
 type CachedAuctionRepository struct {
 	inner domain.SubastaRepository
 	cache DistributedCache
 	ttl   time.Duration
+	sf    singleflight.Group
 }
 
 func NewCachedAuctionRepository(inner domain.SubastaRepository, cache DistributedCache, ttl time.Duration) *CachedAuctionRepository {
@@ -70,6 +72,17 @@ func NewCachedAuctionRepository(inner domain.SubastaRepository, cache Distribute
 		cache: cache,
 		ttl:   ttl,
 	}
+}
+
+func cloneAuction(src *domain.Subasta) *domain.Subasta {
+	if src == nil {
+		return nil
+	}
+	cp := *src
+	if cp.Pujas == nil {
+		cp.Pujas = make([]domain.Puja, 0)
+	}
+	return &cp
 }
 
 func (r *CachedAuctionRepository) ObtenerPorID(ctx context.Context, id string) (*domain.Subasta, error) {
@@ -85,16 +98,22 @@ func (r *CachedAuctionRepository) ObtenerPorID(ctx context.Context, id string) (
 		}
 	}
 
-	subasta, err := r.inner.ObtenerPorID(ctx, id)
+	val, err, _ := r.sf.Do(auctionItemKeyPrefix+id, func() (any, error) {
+		subasta, err := r.inner.ObtenerPorID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if r.cache != nil && subasta != nil {
+			if encoded, mErr := json.Marshal(subasta); mErr == nil {
+				_ = r.cache.Set(ctx, auctionItemKeyPrefix+id, encoded, r.ttl)
+			}
+		}
+		return subasta, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if r.cache != nil && subasta != nil {
-		if encoded, err := json.Marshal(subasta); err == nil {
-			_ = r.cache.Set(ctx, auctionItemKeyPrefix+id, encoded, r.ttl)
-		}
-	}
-	return subasta, nil
+	return cloneAuction(val.(*domain.Subasta)), nil
 }
 
 func (r *CachedAuctionRepository) Listar(ctx context.Context) ([]*domain.Subasta, error) {
@@ -107,16 +126,27 @@ func (r *CachedAuctionRepository) Listar(ctx context.Context) ([]*domain.Subasta
 		}
 	}
 
-	list, err := r.inner.Listar(ctx)
+	val, err, _ := r.sf.Do(auctionListCacheKey, func() (any, error) {
+		list, err := r.inner.Listar(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if r.cache != nil {
+			if encoded, mErr := json.Marshal(list); mErr == nil {
+				_ = r.cache.Set(ctx, auctionListCacheKey, encoded, r.ttl)
+			}
+		}
+		return list, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if r.cache != nil {
-		if encoded, err := json.Marshal(list); err == nil {
-			_ = r.cache.Set(ctx, auctionListCacheKey, encoded, r.ttl)
-		}
+	src := val.([]*domain.Subasta)
+	out := make([]*domain.Subasta, len(src))
+	for i, s := range src {
+		out[i] = cloneAuction(s)
 	}
-	return list, nil
+	return out, nil
 }
 
 func (r *CachedAuctionRepository) ListarVencidas(ctx context.Context, now time.Time) ([]*domain.Subasta, error) {

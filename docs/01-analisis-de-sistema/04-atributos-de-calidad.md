@@ -8,18 +8,18 @@
 
 ## 1. Atributos de Calidad del Dominio (`AC01` – `AC08`)
 
-Escenario analizado: durante un evento en vivo, $1,000$ o más espectadores pueden estar conectados simultáneamente, varios pujando en la misma ventana de segundos sobre el mismo lote, mientras el estado de la sala y el precio líder se difunden en tiempo real sin condiciones de carrera.
+Escenario analizado: durante un evento en vivo, $2,000$ o más espectadores pueden estar conectados simultáneamente (escalable a $5,000+$), varios pujando en la misma ventana de segundos sobre el mismo lote, mientras el estado de la sala y el precio líder se difunden en tiempo real sin condiciones de carrera.
 
 | ID | Atributo de calidad | Escenario de calidad y criterio de éxito |
 | :--- | :--- | :--- |
-| **AC01** | **Rendimiento** | Una puja debe validarse y confirmarse en menos de $200\text{ ms}$ (procesamiento local $< 25\text{ ms}$) y el nuevo precio líder debe difundirse a todos los participantes de la sala en tiempo real, incluso con $1,000+$ usuarios conectados. |
-| **AC02** | **Escalabilidad** | El sistema debe soportar $1,000+$ espectadores/pujadores concurrentes por evento mediante el `AuctionRoomHub` en Go ($O(1)$ suscripción a Redis Pub/Sub por sala activa), permitiendo escalar horizontalmente instancias del backend sin multiplicar la carga sobre el bus en memoria. |
+| **AC01** | **Rendimiento** | Una puja debe validarse y confirmarse en menos de $200\text{ ms}$ (procesamiento local $< 25\text{ ms}$) y el nuevo precio líder debe difundirse a todos los participantes de la sala en tiempo real, incluso con $2,000+$ usuarios conectados. |
+| **AC02** | **Escalabilidad** | El sistema debe soportar $2,000+$ espectadores/pujadores concurrentes por evento (con proyección a $5,000+$) mediante el `AuctionRoomHub` en Go ($O(1)$ suscripción a Redis Pub/Sub por sala activa), balanceo `least_conn` en Nginx (`worker_connections 16384`) y pooling transaccional en `PgBouncer`, permitiendo escalar vertical y horizontalmente en **Microsoft Azure**. |
 | **AC03** | **Disponibilidad y Resiliencia** | El sistema debe mantenerse disponible al menos el $99.5\%$ del tiempo durante una subasta en vivo y degradarse con elegancia (`Circuit Breaker` de $150\text{ ms}$) ante fallos o lentitud de servicios externos como Google Gemini IA. |
 | **AC04** | **Seguridad (`Zero-Trust`)** | Los datos personales y financieros deben protegerse frente a accesos no autorizados: las tarjetas se tokenizan directamente en **Stripe** (`PCI-DSS`), los endpoints validan `JWT` + rol/estado activo (`RBAC`), y cada postor pasa por evaluación de riesgo y verificación de garantía en custodia (`Escrow`) antes de pujar. |
 | **AC05** | **Integridad y Orden Verificable** | El orden en que se procesan las pujas debe ser estrictamente secuencial, atómico y trazable usando el timestamp oficial del servidor, bloqueo distribuido (`SETNX` en Redis), bloqueo pesimista (`SELECT ... FOR UPDATE` en PostgreSQL), cadena de hashes `SHA-256` y árbol de Merkle (`MerkleRoot`). |
 | **AC06** | **Mantenibilidad y Evolución** | El núcleo de dominio (`internal/core/domain`) debe permanecer libre de dependencias de infraestructura para incorporar nuevas reglas de subasta, modelos de IA (`MultiModelRouter`) o pasarelas de pago/Web3 mediante puertos y adaptadores sin modificar la lógica central. |
 | **AC07** | **Usabilidad en Tiempo Real** | El postor, martillero y vendedor deben percibir el precio líder, el cronómetro *Anti-Sniping* ($+30\text{ s}$ en los últimos $15\text{ s}$) y el estado de la sala sincronizados instantáneamente vía WebSockets sin necesidad de recargar la página. |
-| **AC08** | **Portabilidad** | Todo el ecosistema (`livebid-api`, `livebid-postgres`, `livebid-redis`) debe ejecutarse de forma idéntica en Linux, macOS o Windows mediante contenedores Docker y compilación multi-stage de Go. |
+| **AC08** | **Portabilidad** | Todo el ecosistema (`livebid-gateway`, `livebid-api-1/2`, `livebid-pgbouncer`, `livebid-postgres`, `livebid-redis`) debe ejecutarse de forma idéntica en Linux, macOS, Windows y sobre infraestructura cloud **Microsoft Azure (Ubuntu VM `Standard_B2s` + Cloudflare Edge HTTPS/WSS)** mediante contenedores Docker y compilación multi-stage de Go. |
 
 ### ¿Por qué `AC05` y `AC07` no aparecen en un marketplace convencional?
 

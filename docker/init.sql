@@ -68,9 +68,10 @@ ALTER TABLE subastas DROP CONSTRAINT IF EXISTS subastas_estado_check;
 ALTER TABLE subastas ADD CONSTRAINT subastas_estado_check
     CHECK (estado IN ('PENDIENTE', 'ACTIVA', 'EN_CONTEO', 'CERRADA', 'PROGRAMADA', 'EN_CONTEO_MARTILLO', 'ADJUDICADA', 'DESIERTA', 'CANCELADA'));
 
--- Índices de alto rendimiento para sala en vivo
+-- Índices de alto rendimiento para sala en vivo y catálogo ordenado
 CREATE INDEX IF NOT EXISTS idx_subastas_estado ON subastas(estado);
 CREATE INDEX IF NOT EXISTS idx_subastas_fin ON subastas(fin_programado);
+CREATE INDEX IF NOT EXISTS idx_subastas_created_at ON subastas(created_at DESC);
 
 -- 3. Tabla de Depósitos en Custodia (Escrow)
 CREATE TABLE IF NOT EXISTS garantias (

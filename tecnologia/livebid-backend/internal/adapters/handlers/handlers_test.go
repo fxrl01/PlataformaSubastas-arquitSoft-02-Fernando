@@ -259,13 +259,23 @@ func buildTestRouter(t *testing.T) (http.Handler, *services.AuthService) {
 	bidH := handlers.NewBidHandler(bidSvc)
 	historyH := handlers.NewBidHistoryHandler(historySvc)
 	guaranteeH := handlers.NewGuaranteeHandler(guaranteeSvc)
-	aiH := handlers.NewAgentAIHandler(agentSvc, router, breaker, detector)
+	aiH := handlers.NewAgentAIHandler(agentSvc, router, breaker, detector).WithAssistant(ai.NewGeminiAssistant(""), auctions)
+	socialH := handlers.NewSocialHandler(handlers.NewMemorySocialRepository(), users).WithRoomRealtime(auctions, nil)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/ia/asistente", aiH.AssistantChat)
+	mux.HandleFunc("GET /api/v1/social/posts", socialH.ListPosts)
+	mux.Handle("POST /api/v1/social/posts", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.CreatePost)))
+	mux.Handle("POST /api/v1/social/posts/{id}/like", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.LikePost)))
+	mux.Handle("POST /api/v1/social/posts/{id}/comentarios", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.AddComment)))
+	mux.HandleFunc("GET /api/v1/vendedores/{id}/vitrina", socialH.GetSellerStorefront)
+	mux.HandleFunc("GET /api/v1/subastas/{id}/mensajes", socialH.ListRoomMessages)
+	mux.Handle("POST /api/v1/subastas/{id}/mensajes", handlers.RequireAuth(issuer, users, http.HandlerFunc(socialH.PostRoomMessage)))
 	mux.HandleFunc("POST /api/v1/auth/register", authH.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
 	mux.Handle("GET /api/v1/auth/me", handlers.RequireAuth(issuer, users, http.HandlerFunc(authH.Me)))
+	mux.Handle("PATCH /api/v1/auth/me", handlers.RequireAuth(issuer, users, http.HandlerFunc(authH.UpdateMe)))
 	mux.Handle("GET /api/v1/admin/users", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.ListUsers))))
 	mux.Handle("PATCH /api/v1/admin/users/{id}/activate", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.ActivateUser))))
 	mux.Handle("PATCH /api/v1/admin/users/{id}/role", handlers.RequireAuth(issuer, users, handlers.RequireRoles(domain.RoleAdmin)(http.HandlerFunc(authH.UpdateUserRole))))
@@ -363,6 +373,59 @@ func TestHandlersFullHTTPFlowAndRBAC(t *testing.T) {
 	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/auth/me", bidderAuth.AccessToken, nil); rec.Code != http.StatusOK {
 		t.Fatalf("/me failed: %d", rec.Code)
 	}
+	if rec := doJSONReq(t, mux, http.MethodPatch, "/api/v1/auth/me", bidderAuth.AccessToken, map[string]string{
+		"name":     "Postor Perfil Editado",
+		"telefono": "+51 999 888 111",
+		"bio":      "Coleccionista activo en subastas verificadas",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("patch /me failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Social Feed: listar, publicar, reaccionar y comentar
+	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/social/posts", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("list social posts failed: %d", rec.Code)
+	}
+	socialCreate := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts", bidderAuth.AccessToken, map[string]string{
+		"contenido": "Esperando el inicio del proximo lote en cronograma",
+		"etiqueta":  "COMUNIDAD",
+	})
+	if socialCreate.Code != http.StatusCreated {
+		t.Fatalf("create social post failed: %d %s", socialCreate.Code, socialCreate.Body.String())
+	}
+	var createdPost domain.SocialPost
+	_ = json.Unmarshal(socialCreate.Body.Bytes(), &createdPost)
+	// Sin token debe ser rechazado (401) para evitar spam anónimo
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts/"+createdPost.ID+"/like", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on anonymous like, got %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts/"+createdPost.ID+"/like", bidderAuth.AccessToken, nil); rec.Code != http.StatusOK {
+		t.Fatalf("like social post failed: %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/social/posts/"+createdPost.ID+"/comentarios", bidderAuth.AccessToken, map[string]string{
+		"comentario": "¡Mucho exito en la subasta!",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("comment social post failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Vitrina pública sanitizada (no debe filtrar email ni documento privado)
+	storeRes := doJSONReq(t, mux, http.MethodGet, "/api/v1/vendedores/"+registered.ID+"/vitrina", "", nil)
+	if storeRes.Code != http.StatusOK {
+		t.Fatalf("get seller storefront failed: %d", storeRes.Code)
+	}
+	if bytes.Contains(storeRes.Body.Bytes(), []byte("postor.http@livebid.pe")) {
+		t.Fatalf("storefront leaked private email: %s", storeRes.Body.String())
+	}
+
+	// Chat y reacciones en vivo de sala
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/subastas/SUB-TEST/mensajes", bidderAuth.AccessToken, map[string]string{
+		"tipo":    "CHAT",
+		"mensaje": "¡Listos para ofertar!",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("post room message failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/subastas/SUB-TEST/mensajes", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("list room messages failed: %d", rec.Code)
+	}
 	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/auth/refresh", "", map[string]string{"refresh_token": bidderAuth.RefreshToken}); rec.Code != http.StatusOK {
 		t.Fatalf("refresh failed: %d", rec.Code)
 	}
@@ -453,6 +516,19 @@ func TestHandlersFullHTTPFlowAndRBAC(t *testing.T) {
 	}
 	if rec := doJSONReq(t, mux, http.MethodGet, "/api/v1/subastas/"+auctionID+"/inteligencia-ia", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("intelligence report failed: %d", rec.Code)
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/ia/asistente", "", map[string]any{
+		"mensaje":        "¿Cuanto necesito para ofertar en este lote?",
+		"subasta_id":     auctionID,
+		"rol_usuario":    "POSTOR",
+		"nombre_usuario": "Postor HTTP",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("assistant chat failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSONReq(t, mux, http.MethodPost, "/api/v1/ia/asistente", "", map[string]any{
+		"mensaje": "   ",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on empty assistant message, got %d", rec.Code)
 	}
 
 	// 5. Conteo, Cierre y Auditoría Web3 + Webhook Stripe

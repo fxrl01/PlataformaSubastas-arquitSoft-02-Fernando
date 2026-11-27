@@ -11,7 +11,7 @@
 Descomponer el sistema **LiveBid** en sus contenedores ejecutables dejando **100% claro para el desarrollo continuo** que:
 1. **PostgreSQL 16 es la ÚNICA Base de Datos del sistema (Single Source of Truth ACID)**.
 2. **Redis NO es una segunda base de datos**: es únicamente un **bus efímero en memoria** (semáforo de `1.5s` y difusión WebSocket) que incluso puede reemplazarse en desarrollo local por memoria nativa de Go.
-3. **Stripe API**, **Cloud Storage (S3/CDN) & KYC**, **Google Gemini IA** y **Web3** se conectan como servicios externos desacoplados.
+3. **Stripe API**, **Azure Blob Storage / Cloudflare CDN & KYC**, **Google Gemini IA** y **Web3** se conectan como servicios externos desacoplados, desplegando el clúster sobre **Microsoft Azure + Cloudflare Edge (`HTTPS`/`WSS`)**.
 
 ---
 
@@ -31,7 +31,7 @@ graph LR
         Staff["🔨 Vendedor / Martillero / Admin"]:::person
     end
 
-    subgraph LiveBidBoundary["2. Plataforma LiveBid (Entorno Docker / Cloud)"]
+    subgraph LiveBidBoundary["2. Plataforma LiveBid (Microsoft Azure VM + Cloudflare Edge + Docker)"]
         WebUI["🌐 Aplicación Web SPA<br><i>[HTML5 / JS / WebSockets]</i><br>Sala de subastas en vivo, pasarela de garantía Stripe, ficha del encargado/lote y panel Admin RBAC"]:::frontend
 
         GoServer["⚙️ Backend Core: Monolito Modular Hexagonal<br><i>[Contenedor Único: Go 1.23+ · :3000]</i><br>Contiene los 6 Módulos de Negocio:<br>M1. Usuarios/Roles · M2. Catálogo/Encargado/Lote<br>M3. Pagos Stripe · M4. Pujas en Vivo<br>M5. Copiloto IA · M6. Auditoría Legal"]:::backend
@@ -43,7 +43,7 @@ graph LR
 
     subgraph Externos["3. Pasarela Stripe y Servicios Externos"]
         StripeAPI["💳 Stripe API (Pasarela de Pagos)<br><i>PaymentIntents Hold, Capture, Cancel & Webhooks</i>"]:::ext
-        CloudKYC["☁️ Cloud Storage (S3/CDN) & KYC<br><i>Fotos del lote, PDF peritaje y validación DNI/SUNARP</i>"]:::ext
+        CloudKYC["☁️ Azure Blob Storage / Cloudflare CDN & KYC<br><i>Fotos del lote, PDF peritaje y validación DNI/SUNARP</i>"]:::ext
         GeminiCloud["🤖 Google Gemini API (IA)<br><i>Scoring de riesgo con Circuit Breaker (<150ms)</i>"]:::ext
         Web3Network["⛓️ Pasarela Web3 Base L2 (Opcional)<br><i>Firmas EIP-712 y Sello Merkle</i>"]:::ext
     end

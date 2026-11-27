@@ -53,7 +53,16 @@ type UserView struct {
 	DocumentID    string            `json:"documento_identidad,omitempty"`
 	Phone         string            `json:"telefono,omitempty"`
 	WalletAddress string            `json:"wallet_address,omitempty"`
+	Bio           string            `json:"bio,omitempty"`
 	CreatedAt     time.Time         `json:"created_at,omitempty"`
+}
+
+type UpdateProfileCmd struct {
+	Name          string
+	Phone         string
+	DocumentID    string
+	WalletAddress string
+	Bio           string
 }
 
 func NewAuthService(users domain.UserRepository, hasher domain.PasswordHasher, tokens domain.TokenIssuer, refreshTokens ...domain.RefreshTokenStore) *AuthService {
@@ -282,6 +291,39 @@ func (s *AuthService) GetProfile(ctx context.Context, id string) (UserView, erro
 	return toUserView(user), nil
 }
 
+func (s *AuthService) UpdateProfile(ctx context.Context, id string, cmd UpdateProfileCmd) (UserView, error) {
+	user, err := s.users.FindByID(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	name := strings.TrimSpace(cmd.Name)
+	if name == "" {
+		name = user.Name
+	}
+	phone := strings.TrimSpace(cmd.Phone)
+	doc := strings.TrimSpace(cmd.DocumentID)
+	if doc == "" {
+		doc = user.DocumentID
+	}
+	wallet := strings.TrimSpace(cmd.WalletAddress)
+	bio := strings.TrimSpace(cmd.Bio)
+
+	if updater, ok := s.users.(domain.UserProfileUpdater); ok {
+		if err := updater.UpdateProfile(ctx, id, name, phone, doc, wallet, bio); err != nil {
+			return UserView{}, err
+		}
+		if updated, err := s.users.FindByID(ctx, id); err == nil {
+			return toUserView(updated), nil
+		}
+	}
+	user.Name = name
+	user.Phone = phone
+	user.DocumentID = doc
+	user.WalletAddress = wallet
+	user.Bio = bio
+	return toUserView(user), nil
+}
+
 func (s *AuthService) Refresh(ctx context.Context, rawToken string) (AuthResponse, error) {
 	if s.refreshTokens == nil || rawToken == "" {
 		return AuthResponse{}, domain.ErrRefreshTokenInvalid
@@ -333,6 +375,7 @@ func toUserView(user *domain.User) UserView {
 		DocumentID:    user.DocumentID,
 		Phone:         user.Phone,
 		WalletAddress: user.WalletAddress,
+		Bio:           user.Bio,
 		CreatedAt:     user.CreatedAt,
 	}
 }

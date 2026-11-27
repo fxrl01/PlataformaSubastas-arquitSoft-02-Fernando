@@ -14,7 +14,7 @@
 | **Fuente** | Postores humanos y Agentes Autónomos de IA compitiendo en una sala activa |
 | **Estímulo** | Ráfaga de pujas durante los últimos 15 segundos del conteo (*franja Anti-Sniping*) |
 | **Artefacto** | `AuctionService` + `RedisLockAdapter` (`SETNX`) + `AuctionRoomHub` (1 suscripción Redis Pub/Sub por sala) |
-| **Entorno** | Sala en vivo con $1,000+$ espectadores conectados simultáneamente |
+| **Entorno** | Sala en vivo con $2,000+$ espectadores conectados simultáneamente (escalable a $5,000+$) sobre Microsoft Azure + Cloudflare WSS |
 | **Respuesta esperada** | El motor valida la oferta, extiende $+30\text{ s}$ el cierre, registra el nuevo líder y difunde el evento a todos los clientes compartiendo una única suscripción Redis por sala |
 | **Medida** | **P95 de confirmación < 200 ms**; difusión local por `AuctionRoomHub` **< 25 ms**; **1 sola suscripción Redis Pub/Sub por subasta activa ($O(1)$)** |
 
