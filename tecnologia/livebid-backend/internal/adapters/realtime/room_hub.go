@@ -61,6 +61,7 @@ func NewRedisSubscriber(client *redis.Client) PubSubSubscriber {
 
 type auctionRoom struct {
 	auctionID string
+	mu        sync.RWMutex
 	clients   map[chan []byte]struct{}
 	cancel    context.CancelFunc
 	stream    PubSubStream
@@ -102,7 +103,9 @@ func (h *AuctionRoomHub) Join(auctionID string) (<-chan []byte, func(), error) {
 	}
 
 	clientCh := make(chan []byte, 32)
+	room.mu.Lock()
 	room.clients[clientCh] = struct{}{}
+	room.mu.Unlock()
 	h.mu.Unlock()
 
 	var once sync.Once
@@ -129,7 +132,7 @@ func (h *AuctionRoomHub) fanOut(ctx context.Context, room *auctionRoom) {
 			if !ok {
 				return
 			}
-			h.mu.Lock()
+			room.mu.RLock()
 			for clientCh := range room.clients {
 				select {
 				case clientCh <- payload:
@@ -145,7 +148,7 @@ func (h *AuctionRoomHub) fanOut(ctx context.Context, room *auctionRoom) {
 					}
 				}
 			}
-			h.mu.Unlock()
+			room.mu.RUnlock()
 		}
 	}
 }
@@ -157,9 +160,12 @@ func (h *AuctionRoomHub) leave(auctionID string, clientCh chan []byte) {
 		h.mu.Unlock()
 		return
 	}
+	room.mu.Lock()
 	delete(room.clients, clientCh)
 	close(clientCh)
 	shouldCloseRoom := len(room.clients) == 0
+	room.mu.Unlock()
+
 	if shouldCloseRoom {
 		delete(h.rooms, auctionID)
 	}

@@ -8,13 +8,19 @@ import (
 	"time"
 )
 
+const rateLimiterShardCount = 16
+
+type rateShard struct {
+	mu      sync.Mutex
+	buckets map[string]*ipWindow
+}
+
 // IPRateLimiter protege endpoints sensibles (login, registro, IA, escrituras sociales)
-// frente a ataques de fuerza bruta y agotamiento de cuota por dirección IP.
+// frente a ataques de fuerza bruta usando 16 shards FNV-1a para minimizar contención multi-hilo.
 type IPRateLimiter struct {
-	mu          sync.Mutex
 	window      time.Duration
 	maxRequests int
-	buckets     map[string]*ipWindow
+	shards      [rateLimiterShardCount]rateShard
 	now         func() time.Time
 }
 
@@ -30,12 +36,24 @@ func NewIPRateLimiter(maxRequests int, window time.Duration) *IPRateLimiter {
 	if window <= 0 {
 		window = time.Minute
 	}
-	return &IPRateLimiter{
+	l := &IPRateLimiter{
 		window:      window,
 		maxRequests: maxRequests,
-		buckets:     make(map[string]*ipWindow),
 		now:         time.Now,
 	}
+	for i := range l.shards {
+		l.shards[i].buckets = make(map[string]*ipWindow, 64)
+	}
+	return l
+}
+
+func fnvShardIndex(ip string) uint32 {
+	var h uint32 = 2166136261
+	for i := 0; i < len(ip); i++ {
+		h ^= uint32(ip[i])
+		h *= 16777619
+	}
+	return h & (rateLimiterShardCount - 1)
 }
 
 func (l *IPRateLimiter) Allow(ip string) bool {
@@ -43,20 +61,21 @@ func (l *IPRateLimiter) Allow(ip string) bool {
 		ip = "unknown"
 	}
 	now := l.now()
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	shard := &l.shards[fnvShardIndex(ip)]
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
 
-	if len(l.buckets) > 4096 {
-		for k, b := range l.buckets {
+	if len(shard.buckets) > 512 {
+		for k, b := range shard.buckets {
 			if now.After(b.resetAt) {
-				delete(l.buckets, k)
+				delete(shard.buckets, k)
 			}
 		}
 	}
 
-	b, exists := l.buckets[ip]
+	b, exists := shard.buckets[ip]
 	if !exists || now.After(b.resetAt) {
-		l.buckets[ip] = &ipWindow{count: 1, resetAt: now.Add(l.window)}
+		shard.buckets[ip] = &ipWindow{count: 1, resetAt: now.Add(l.window)}
 		return true
 	}
 	if b.count >= l.maxRequests {
