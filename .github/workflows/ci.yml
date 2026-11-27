@@ -163,35 +163,41 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/e2e/package-lock.json
 
-      - name: Run Playwright E2E suite (Multi-viewport 320px+ & 2 Browsers WS + Merkle)
+      - name: Run Playwright E2E, UI/WCAG & OWASP DAST suites
         working-directory: tests/e2e
         run: |
           npm ci
           npx playwright install chromium --with-deps
-          npx playwright test
+          npm run test:all
 
-      - name: Run k6 baseline load & WebSocket benchmark
+      - name: Run k6 baseline load, Anti-Sniping Spike & Nginx HA Failover tests
         run: |
-          mkdir -p tests/load/results
+          mkdir -p tests/load/results tests/stress/results
           docker run --rm --network host -u $(id -u):$(id -g) \
             -e PROFILE=ci \
             -v "$PWD/tests/load:/scripts" \
             grafana/k6 run --summary-export=/scripts/results/k6-ci-summary.json /scripts/livebid-load.js
+          docker run --rm --network host -u $(id -u):$(id -g) \
+            -v "$PWD/tests/stress:/scripts" \
+            grafana/k6 run --summary-export=/scripts/results/spike-summary.json /scripts/spike-antisniping.k6.js
+          bash tests/resilience/failover-ha.sh
           {
-            echo "### Validación E2E (Playwright) y Carga Base (k6)"
-            echo "- Cluster activo: Nginx Gateway + 2 Réplicas Go + PgBouncer + PostgreSQL 16 + Redis 7"
-            echo "- Playwright E2E (320px móvil a 1280px escritorio + WebSockets + Stripe + Merkle): **PASSED**"
-            echo "- k6 Baseline (155 VUs concurrentes): **PASSED**"
+            echo "### Validación 360° en Clúster Real (E2E + UI/WCAG + OWASP DAST + Load + Spike + Failover HA)"
+            echo "- Clúster activo: Nginx Gateway + 2 Réplicas Go + PgBouncer + PostgreSQL 16 + Redis 7"
+            echo "- Playwright E2E, UI/Accesibilidad (320px-1280px) y Pentesting OWASP DAST: **PASSED**"
+            echo "- k6 Baseline (155 VUs) + Spike Anti-Sniping Stampede (150 VUs): **PASSED**"
+            echo "- Resiliencia / Alta Disponibilidad (caída abrupta de `livebid-api-2` con `0%` downtime): **PASSED**"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Playwright & k6 reports
+      - name: Upload Playwright, k6 Load & Spike reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-and-k6-reports
+          name: e2e-ui-security-k6-reports
           path: |
             tests/e2e/playwright-report/
             tests/load/results/
+            tests/stress/results/
 
       - name: Teardown Docker cluster
         if: always()

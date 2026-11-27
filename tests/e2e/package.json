@@ -1,9 +1,12 @@
 {
-  "name": "livebid-e2e-tests",
-  "version": "1.0.0",
+  "name": "livebid-e2e-ui-security-tests",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test -c playwright.config.js",
+    "test:ui": "playwright test -c ../ui/playwright.ui.config.js",
+    "test:security": "playwright test -c ../security/playwright.security.config.js",
+    "test:all": "npm run test:e2e && npm run test:ui && npm run test:security"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"
