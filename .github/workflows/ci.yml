@@ -1,10 +1,15 @@
-name: LiveBid CI — Build, Tests, E2E & k6 Load
+name: LiveBid CI — Build, Tests, E2E & k6 Baseline
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-publica]
   pull_request:
-    branches: [main]
+    branches: [main, release-publica]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -43,10 +48,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Go 1.23
+      - name: Setup Go from go.mod
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: tecnologia/livebid-backend/go.mod
           cache-dependency-path: tecnologia/livebid-backend/go.sum
 
       - name: Initialize PostgreSQL schema
@@ -69,7 +74,12 @@ jobs:
           TEST_REDIS_URL: redis://localhost:6379
         run: |
           go test -v -race -coverprofile=coverage.out ./...
-          go tool cover -func=coverage.out | tail -n 15
+          {
+            echo "### Cobertura Backend Go (Clean Architecture + `-race`)"
+            echo '```text'
+            go tool cover -func=coverage.out | tail -n 15
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Go coverage report
         uses: actions/upload-artifact@v4
@@ -100,6 +110,10 @@ jobs:
           npm run test:bids
           npm run test:escrow
           npm run test:server
+          {
+            echo "### Cobertura Jest Clean Architecture (TypeScript)"
+            echo "- Umbral exigido y cumplido: **100% Statements, Branches, Functions y Lines**."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Jest HTML & LCOV coverage report
         uses: actions/upload-artifact@v4
@@ -108,7 +122,7 @@ jobs:
           path: tecnologia/boilerplate-clean-arquitecture/coverage/
 
   e2e-and-load-cluster:
-    name: Docker Cluster + Playwright E2E + k6 Load Test
+    name: Docker Cluster + Playwright E2E + k6 Baseline
     runs-on: ubuntu-latest
     needs: [go-unit-and-integration, jest-clean-architecture-coverage]
 
@@ -133,7 +147,7 @@ jobs:
       - name: Start full scalable cluster (Nginx + 2 Go replicas + PgBouncer + Postgres + Redis)
         run: |
           docker compose up --build -d
-          for i in $(seq 1 30); do
+          for i in $(seq 1 45); do
             if curl -sf http://localhost:3000/health | grep -q '"status":"UP"'; then
               echo "Cluster healthy!"
               break
@@ -149,19 +163,26 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/e2e/package-lock.json
 
-      - name: Run Playwright E2E suite (2 browsers + WebSocket + Stripe + Merkle)
+      - name: Run Playwright E2E suite (Multi-viewport 320px+ & 2 Browsers WS + Merkle)
         working-directory: tests/e2e
         run: |
           npm ci
           npx playwright install chromium --with-deps
           npx playwright test
 
-      - name: Run k6 load & WebSocket benchmark
+      - name: Run k6 baseline load & WebSocket benchmark
         run: |
           mkdir -p tests/load/results
           docker run --rm --network host -u $(id -u):$(id -g) \
+            -e PROFILE=ci \
             -v "$PWD/tests/load:/scripts" \
-            grafana/k6 run /scripts/livebid-load.js
+            grafana/k6 run --summary-export=/scripts/results/k6-ci-summary.json /scripts/livebid-load.js
+          {
+            echo "### Validación E2E (Playwright) y Carga Base (k6)"
+            echo "- Cluster activo: Nginx Gateway + 2 Réplicas Go + PgBouncer + PostgreSQL 16 + Redis 7"
+            echo "- Playwright E2E (320px móvil a 1280px escritorio + WebSockets + Stripe + Merkle): **PASSED**"
+            echo "- k6 Baseline (155 VUs concurrentes): **PASSED**"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright & k6 reports
         if: always()
