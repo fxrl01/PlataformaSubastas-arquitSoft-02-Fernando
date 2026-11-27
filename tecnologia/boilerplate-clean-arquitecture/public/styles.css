@@ -1,5 +1,5 @@
 /* =============================================================================
-   AUREUM & CO. — SISTEMA DE DISEÑO DUAL (MODO CLARO & MODO OSCURO ARMÓNICO)
+   LIVEBID — SISTEMA DE DISEÑO DUAL (MODO CLARO & MODO OSCURO ARMÓNICO)
    - dark-mode + dark-mode-toggle: color-scheme: light dark + light-dark() + fallback
    - branded-select-styling: contraste total en <select> y <option> + base-select
    - navigation-drawer: <dialog class="AssistantDrawer"> con scroll-snap y 100svh
@@ -144,9 +144,21 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --radius-card: 14px;
   --radius-sub: 9px;
+  --target-size: 24px;
 
   accent-color: var(--accent-gold-solid);
   scrollbar-color: var(--text-muted) transparent;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --target-size: 44px;
+  }
+}
+
+html {
+  scroll-padding-top: 5.5rem;
+  scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
 }
 
 * {
@@ -155,24 +167,68 @@
   padding: 0;
 }
 
+/* MANDATORY (form-factor-adaptation): sin overflow-x: hidden en html/body; hacer que cada bloque encaje */
 body {
   background-color: var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-sans);
   line-height: 1.55;
   min-height: 100dvh;
-  overflow-x: hidden;
-  padding-bottom: 88px;
+  overflow-wrap: break-word;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+img,
+video,
+svg {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+:where(a, code) {
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
+
+:where(button, select, textarea, input:not([type="checkbox"], [type="radio"]), [role="button"], nav a, label:has(input[type="checkbox"], input[type="radio"])) {
+  min-block-size: var(--target-size);
+  min-inline-size: var(--target-size);
+}
+
+.brand-logo-svg {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.admin-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
+  max-inline-size: 1px;
   padding: 0;
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
@@ -3065,41 +3121,155 @@ table.admin-users-table tbody th {
 }
 
 /* =============================================================================
-   RESPONSIVIDAD MULTIDISPOSITIVO
+   RESPONSIVIDAD UNIVERSAL DE FACTOR DE FORMA (320px MÓVIL -> TABLET -> 4K PC)
    ============================================================================= */
 
 @media (max-width: 1320px) {
   .auction-dashboard {
-    grid-template-columns: minmax(280px, 1fr) minmax(340px, 1.2fr);
+    grid-template-columns: minmax(270px, 1fr) minmax(320px, 1.2fr);
   }
 
   .sidebar-card {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   }
 }
 
-@media (max-width: 940px) {
+@media (max-width: 960px) {
   .auction-dashboard,
   .social-layout,
   .profile-layout,
   .sidebar-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .user-badge {
+    padding: 4px;
+  }
+}
+
+/* Pantallas móviles y tablets verticales (<= 768px): cabecera ligera + barra inferior tipo app nativa */
+@media (max-width: 768px) {
+  .top-nav {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .nav-brand-row {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .brand-sub,
+  .nav-btn-text,
+  .hide-on-mobile {
+    display: none;
+  }
+
+  .nav-left {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .auction-picker-wrap {
+    flex: 1 1 100%;
+    min-inline-size: 0;
+  }
+
+  .lote-select,
+  select.brand-select.lote-select {
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .nav-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .module-nav-actions {
+    gap: 5px;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .btn-nav-module {
+    padding: 7px 10px;
+    font-size: 0.74rem;
+  }
+
+  /* Barra de navegación fija inferior con respeto de safe-area-inset-bottom */
+  .section-navbar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 44;
+    background: var(--bg-header);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    padding: 4px max(6px, env(safe-area-inset-left, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-right, 0px));
+    overflow: visible;
+  }
+
+  .section-nav-link {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    font-size: 0.65rem;
+    white-space: normal;
+    text-align: center;
+    min-inline-size: 0;
+  }
+
+  .nav-count-badge {
+    display: none;
+  }
+
+  .section-nav-link[aria-current="page"]::after {
+    inset: 0 18% auto;
+    border-block-end: 0;
+    border-block-start: 3px solid var(--accent-gold-solid);
+    border-radius: 0 0 3px 3px;
+  }
+
+  .ai-floating-widget {
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(4.7rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ai-greeting-bubble {
+    display: none;
   }
 }
 
 @media (max-width: 640px) {
-  .brand-sub {
-    display: none;
+  .view-container,
+  .auction-dashboard {
+    padding: 16px 12px;
+  }
+
+  .schedule-filter-group,
+  .schedule-filter-group > :not(.sr-only) {
+    width: 100%;
+    min-inline-size: 0;
   }
 
   .quick-bids-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .input-bid-group {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .btn-action-bid {
@@ -3111,7 +3281,7 @@ table.admin-users-table tbody th {
   .stripe-split-banner,
   .stripe-card-grid,
   .image-upload-zone {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .image-preview-box {
@@ -3126,7 +3296,19 @@ table.admin-users-table tbody th {
     width: 100%;
   }
 
-  .ai-greeting-bubble {
+  .fab-labels {
     display: none;
+  }
+
+  .floating-ai-fab {
+    padding: 8px;
+  }
+}
+
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 1rem;
   }
 }

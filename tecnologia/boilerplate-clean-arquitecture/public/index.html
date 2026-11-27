@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- MANDATORY: Declarar soporte nativo de Modo Claro y Modo Oscuro sin destellos (FOUC) -->
   <meta name="color-scheme" content="light dark">
   <script>
@@ -11,16 +11,18 @@
       document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") ?? "light dark";
     } catch (_) {}
   </script>
-  <title>AUREUM &amp; CO. — Subastas en Vivo, Cronograma, Comunidad y Coleccionismo</title>
+  <title>LiveBid — Subastas en Tiempo Real, Cronograma y Comunidad</title>
   <meta name="description"
-    content="Plataforma interactiva de subastas: explora el cronograma en vivo, descubre el catálogo verificado, participa en el muro social y gestiona tu perfil.">
+    content="LiveBid — Plataforma interactiva de subastas en vivo: explora el cronograma, descubre el catálogo verificado, participa en el muro social y gestiona tu perfil.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20261126-v5">
+  <link rel="shortcut icon" href="/favicon.svg?v=20261126-v5">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=20261126-v4">
+  <link rel="stylesheet" href="/styles.css?v=20261126-v6">
 </head>
 
 <body>
@@ -30,10 +32,10 @@
     <div class="nav-brand-row">
       <div class="nav-left">
         <a href="#cronograma" class="brand" data-go-view="cronograma">
-          <span class="brand-emblem" aria-hidden="true">🏛️</span>
+          <img src="/favicon.svg?v=20261126-v5" alt="" width="34" height="34" class="brand-logo-svg" aria-hidden="true">
           <div class="brand-titles">
-            <span class="brand-name">AUREUM <span class="brand-gold">&amp;</span> CO.</span>
-            <span class="brand-sub">SUBASTAS &amp; COMUNIDAD</span>
+            <span class="brand-name">LIVE<span class="brand-gold">BID</span></span>
+            <span class="brand-sub">SUBASTAS EN VIVO &amp; COMUNIDAD</span>
           </div>
         </a>
 
@@ -56,25 +58,26 @@
         <div class="module-nav-actions">
           <button type="button" class="btn-nav-module btn-publish-cta" id="btnPublishItemNav"
             title="Publicar un bien u objeto de valor en subasta">
-            <span aria-hidden="true">＋</span> Publicar Bien
+            <span aria-hidden="true">＋</span> <span class="nav-btn-text">Publicar Bien</span>
           </button>
 
           <button type="button" class="btn-nav-module hidden" id="btnOpenLotModal"
             title="Gestionar fotografías, ficha y martillero del bien">
-            <span aria-hidden="true">📷</span> Gestionar Lote
+            <span aria-hidden="true">📷</span> <span class="nav-btn-text">Gestionar Lote</span>
           </button>
 
           <button type="button" class="btn-nav-module admin-only-btn hidden" id="btnOpenAdminModal"
             title="Aprobar y verificar cuentas registradas">
-            <span aria-hidden="true">🛡️</span> Administración
+            <span aria-hidden="true">🛡️</span> <span class="nav-btn-text">Administración</span>
             <span id="adminRoleIndicator" class="sr-only">ADMIN</span>
           </button>
 
           <!-- Campana Superior de Notificaciones (Popover API + CSS Anchor Positioning) -->
           <button type="button" class="btn-nav-module btn-notif-bell" id="btnNotificationsBell"
-            popovertarget="notificationsPopover" title="Ver tus alertas de cierre y ofertas superadas">
+            popovertarget="notificationsPopover" aria-label="Alertas y notificaciones"
+            title="Ver tus alertas de cierre y ofertas superadas">
             <span aria-hidden="true">🔔</span>
-            <span>Alertas</span>
+            <span class="nav-btn-text">Alertas</span>
             <span class="notif-count-dot hidden" id="notifUnreadBadge">0</span>
           </button>
 
@@ -93,21 +96,14 @@
             aria-label="Cambiar entre modo claro y modo oscuro" title="Cambiar Modo Claro / Oscuro">
             <span class="theme-icon-sun" aria-hidden="true">☀️</span>
             <span class="theme-icon-moon" aria-hidden="true">🌙</span>
-            <span id="themeToggleLabel">Tema</span>
+            <span id="themeToggleLabel" class="nav-btn-text">Tema</span>
           </button>
 
           <button type="button" class="btn-nav-module btn-ai-trigger" id="btnOpenAiDrawer"
-            aria-expanded="false" aria-controls="aiAssistantDrawer"
+            aria-expanded="false" aria-controls="aiAssistantDrawer" aria-label="Abrir Asistente IA"
             title="Abrir Asistente Inteligente Gemini">
-            <span aria-hidden="true">✨</span> Asistente IA
+            <span aria-hidden="true">✨</span> <span class="nav-btn-text">Asistente IA</span>
           </button>
-
-          <!-- Exclusivo para localhost -->
-          <a href="/swagger" target="_blank" rel="noopener noreferrer"
-            class="btn-nav-module localhost-dev-only hidden" id="btnOpenSwaggerDocs"
-            title="Documentación de APIs (solo en localhost)">
-            API Docs
-          </a>
 
           <button type="button" class="btn-nav-module highlight-auth" id="btnOpenAuthModal">
             <span id="authBtnLabel">Ingresar / Crear Cuenta</span>
@@ -133,23 +129,28 @@
       </div>
     </div>
 
-    <!-- BARRA DE NAVEGACIÓN DE SECCIONES DE LA APP (5 VISTAS DEDICADAS) -->
+    <!-- BARRA DE NAVEGACIÓN DE SECCIONES DE LA APP (5 VISTAS DEDICADAS: SUPERIOR EN PC, INFERIOR EN MÓVIL) -->
     <nav class="section-navbar" aria-label="Secciones de la plataforma">
       <button type="button" class="section-nav-link" data-nav-view="cronograma" aria-current="page">
-        <span aria-hidden="true">🗓️</span> Cronograma de Subastas
+        <span class="nav-tab-icon" aria-hidden="true">🗓️</span>
+        <span class="nav-tab-label"><span class="hide-on-mobile">Cronograma de </span>Subastas</span>
       </button>
       <button type="button" class="section-nav-link" data-nav-view="sala">
-        <span aria-hidden="true">🔨</span> Sala en Vivo
+        <span class="nav-tab-icon" aria-hidden="true">🔨</span>
+        <span class="nav-tab-label">En Vivo</span>
       </button>
       <button type="button" class="section-nav-link" data-nav-view="catalogo">
-        <span aria-hidden="true">🏛️</span> Catálogo de Bienes
+        <span class="nav-tab-icon" aria-hidden="true">🏛️</span>
+        <span class="nav-tab-label">Catálogo</span>
         <span class="nav-count-badge" id="catalogCountBadge">0</span>
       </button>
       <button type="button" class="section-nav-link" data-nav-view="social">
-        <span aria-hidden="true">🌐</span> Social Feed
+        <span class="nav-tab-icon" aria-hidden="true">🌐</span>
+        <span class="nav-tab-label">Social</span>
       </button>
       <button type="button" class="section-nav-link" data-nav-view="perfil">
-        <span aria-hidden="true">👤</span> Mi Perfil y Ajustes
+        <span class="nav-tab-icon" aria-hidden="true">👤</span>
+        <span class="nav-tab-label">Mi Perfil</span>
       </button>
     </nav>
   </header>
@@ -669,7 +670,7 @@
         <header class="assistant-header">
           <div>
             <span class="assistant-eyebrow">ASISTENTE INTERACTIVO • GOOGLE GEMINI</span>
-            <h2 id="aiAssistantTitle">Concierge de Aureum</h2>
+            <h2 id="aiAssistantTitle">Asistente LiveBid</h2>
           </div>
           <div class="assistant-header-right">
             <span class="assistant-status-pill" id="aiProviderBadge">En línea</span>
@@ -686,7 +687,7 @@
 
           <div class="assistant-messages" id="aiChatMessages" role="log" aria-live="polite">
             <div class="ai-msg assistant">
-              <div class="ai-msg-author">✨ Asistente Aureum</div>
+              <div class="ai-msg-author">✨ Asistente LiveBid</div>
               <div class="ai-msg-text">¡Bienvenido! Conozco todas las secciones de la app: Cronograma, Sala en Vivo, Catálogo, Social Feed y Mi Perfil. ¿En qué te ayudo hoy?</div>
               <div class="ai-nav-shortcuts">
                 <button type="button" class="ai-shortcut-pill" data-assistant-goto="cronograma">🗓️ Ir al Cronograma</button>
@@ -1070,7 +1071,15 @@
         </select>
       </div>
 
-      <button type="button" class="btn-pill-quick" id="btnRefreshUsers">Actualizar Lista</button>
+      <div class="admin-toolbar-actions">
+        <a href="/swagger" target="_blank" rel="noopener noreferrer"
+          class="btn-pill-quick localhost-dev-only hidden" id="btnOpenSwaggerDocs"
+          style="text-decoration:none;"
+          title="Consola técnica OpenAPI exclusiva para Administrador en entorno local">
+          📄 Ver OpenAPI (/swagger)
+        </a>
+        <button type="button" class="btn-pill-quick" id="btnRefreshUsers">Actualizar Lista</button>
+      </div>
     </div>
 
     <div id="adminFeedbackMsg" class="dialog-feedback hidden"></div>
@@ -1218,7 +1227,7 @@
     </div>
   </dialog>
 
-  <script src="/app.js?v=20261126-v4"></script>
+  <script src="/app.js?v=20261126-v5"></script>
 </body>
 
 </html>

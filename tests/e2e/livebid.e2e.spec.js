@@ -19,6 +19,10 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     expect(cssRes.headers()['cache-control']).toContain('max-age=3600');
     expect(cssRes.headers()['x-static-layer']).toBe('nginx-frontend-cache');
 
+    const favRes = await request.get('/favicon.svg');
+    expect(favRes.ok()).toBeTruthy();
+    expect(favRes.headers()['content-type']).toContain('image/svg+xml');
+
     const swaggerRes = await request.get('/swagger');
     expect(swaggerRes.ok()).toBeTruthy();
     expect(swaggerRes.headers()['content-type']).toContain('text/html');
@@ -58,8 +62,24 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     const bidderPage = await bidderContext.newPage();
 
     try {
-      // 1. Navegador Postor: Verificar Cronograma, Modo Claro/Oscuro, Catálogo dedicado, Social Feed, Perfil y Asistente IA
+      // 1. Navegador Postor: Verificar ausencia de API Docs en cabecera pública, favicon, responsividad multi-pantalla (320px, 768px, 1280px) y secciones
       await bidderPage.goto('/');
+      await expect(bidderPage.locator('header.top-nav #btnOpenSwaggerDocs')).toHaveCount(0);
+      await expect(bidderPage.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.svg/);
+
+      for (const vp of [
+        { width: 320, height: 680 },
+        { width: 390, height: 844 },
+        { width: 768, height: 1024 },
+        { width: 1280, height: 800 }
+      ]) {
+        await bidderPage.setViewportSize(vp);
+        const overflow = await bidderPage.evaluate(() => {
+          return document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        });
+        expect(overflow).toBeLessThanOrEqual(1);
+      }
+
       await expect(bidderPage.locator('#scheduleGrid article.schedule-card').first()).toBeVisible({ timeout: 10_000 });
       await expect(bidderPage.locator('#navUserName')).toHaveText('Visitante');
 

@@ -102,7 +102,7 @@ func (a *GeminiAssistant) Answer(ctx context.Context, q AssistantQuery) (Assista
 
 	return AssistantReply{
 		Reply:     buildContextualGuideReply(q),
-		Provider:  "aureum-contextual-assistant",
+		Provider:  "livebid-contextual-assistant",
 		Model:     "gemini-ready-local-guide",
 		LocalMode: true,
 		Suggested: defaultSuggestionsForRole(q.UserRole),
@@ -196,7 +196,7 @@ func buildSystemPrompt(q AssistantQuery) string {
 		role = "VISITANTE"
 	}
 	ac := q.AuctionContext
-	return fmt.Sprintf(`Eres el Concierge y Asistente Inteligente de Aureum & Co. (LiveBid), una casa de subastas en tiempo real.
+	return fmt.Sprintf(`Eres el Asistente Inteligente oficial de LiveBid, una plataforma de subastas en tiempo real y comunidad.
 Responde siempre en español claro, amable, breve y útil (máximo 4 párrafos cortos o viñetas), SIN usar jerga interna de programación como JWT, PostgreSQL, JSONB o RBAC.
 
 Funciones principales de la plataforma que debes explicar cuando te pregunten:
@@ -260,7 +260,7 @@ func buildContextualGuideReply(q AssistantQuery) string {
 		if q.UserName != "" && !strings.EqualFold(q.UserName, "Visitante") {
 			saludo = "Hola, " + q.UserName
 		}
-		return fmt.Sprintf("%s. Soy tu asistente de **Aureum & Co. LiveBid**. Estoy viendo contigo **%s** (oferta actual **S/. %.0f**, siguiente mínima **S/. %.0f**).\n\nPuedo ayudarte con:\n• **Comprar y ofertar en vivo:** cuánto ofertar y cómo funciona el reloj de cierre justo (+30 s).\n• **Depósito reembolsable:** cómo activar tu garantía con tarjeta sin cobros si no ganas.\n• **Vender bienes de valor:** cómo registrar una cuenta de Vendedor y subir tus propios lotes con fotografías.", saludo, loteNombre, ac.CurrentPrice, nextMin)
+		return fmt.Sprintf("%s. Soy tu asistente de **LiveBid**. Estoy viendo contigo **%s** (oferta actual **S/. %.0f**, siguiente mínima **S/. %.0f**).\n\nPuedo ayudarte con:\n• **Comprar y ofertar en vivo:** cuánto ofertar y cómo funciona el reloj de cierre justo (+30 s).\n• **Depósito reembolsable:** cómo activar tu garantía con tarjeta sin cobros si no ganas.\n• **Vender bienes de valor:** cómo registrar una cuenta de Vendedor y subir tus propios lotes con fotografías.", saludo, loteNombre, ac.CurrentPrice, nextMin)
 	}
 }
 

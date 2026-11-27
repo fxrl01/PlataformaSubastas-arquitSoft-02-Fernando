@@ -200,7 +200,7 @@ func (h *SocialHandler) GetSellerStorefront(w http.ResponseWriter, r *http.Reque
 
 	view := SellerStorefrontView{
 		ID:              sellerID,
-		Name:            "Vendedor Verificado Aureum",
+		Name:            "Vendedor Verificado LiveBid",
 		Role:            domain.RoleSeller,
 		Verified:        true,
 		Bio:             "Consignante acreditado de bienes y piezas de colección.",
@@ -227,7 +227,7 @@ func (h *SocialHandler) GetSellerStorefront(w http.ResponseWriter, r *http.Reque
 	if allPosts, err := h.repo.ListPosts(r.Context(), 50); err == nil {
 		for _, p := range allPosts {
 			if p.AuthorID == sellerID {
-				if view.Name == "Vendedor Verificado Aureum" && p.AuthorName != "" {
+				if view.Name == "Vendedor Verificado LiveBid" && p.AuthorName != "" {
 					view.Name = p.AuthorName
 					view.Role = p.AuthorRole
 				}
@@ -366,7 +366,7 @@ func NewMemorySocialRepository() *MemorySocialRepository {
 			{
 				ID:         "soc_seed_mem",
 				AuthorID:   "usr_admin",
-				AuthorName: "Curaduría Aureum",
+				AuthorName: "Curaduría LiveBid",
 				AuthorRole: domain.RoleAuctioneer,
 				Content:    "Bienvenidos al muro social de coleccionistas y vendedores.",
 				Tag:        "COMUNIDAD",

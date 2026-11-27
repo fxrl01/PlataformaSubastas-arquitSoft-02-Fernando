@@ -191,6 +191,10 @@ func main() {
 		mux.Handle("GET /index.html", fileServer)
 		mux.Handle("GET /styles.css", fileServer)
 		mux.Handle("GET /app.js", fileServer)
+		mux.Handle("GET /favicon.svg", fileServer)
+		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/favicon.svg", http.StatusMovedPermanently)
+		})
 	}
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

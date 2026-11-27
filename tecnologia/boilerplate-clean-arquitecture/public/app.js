@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * AUREUM & CO. — CONTROLADOR MULTI-VISTA, MODO CLARO/OSCURO, SOCIAL FEED Y PERFIL
+ * LIVEBID — CONTROLADOR MULTI-VISTA, MODO CLARO/OSCURO, SOCIAL FEED Y PERFIL
  *  1. Cronograma y Buscador de Subastas (vista principal limpia para el usuario)
  *  2. Sala en Vivo centrada en el usuario (paletas anónimas, sin datos de otros postores)
  *  3. Catálogo dedicado de Bienes y Consignación con fotos reales
@@ -1099,7 +1099,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="spec-box">
           <span class="spec-label">VERIFICACIÓN</span>
-          <span class="spec-value">${escaparHTML(det.inspeccionado_por || 'Especialista Aureum')}</span>
+          <span class="spec-value">${escaparHTML(det.inspeccionado_por || 'Especialista LiveBid')}</span>
         </div>
       `;
     }
@@ -2208,7 +2208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const author = document.createElement('div');
     author.className = 'ai-msg-author';
-    author.textContent = rol === 'user' ? 'Tú' : (etiqueta || '✨ Asistente Aureum');
+    author.textContent = rol === 'user' ? 'Tú' : (etiqueta || '✨ Asistente LiveBid');
 
     const body = document.createElement('div');
     body.className = 'ai-msg-text';
@@ -2255,7 +2255,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.respuesta) {
-        agregarMensajeChat('assistant', data.respuesta, data.modo_local ? '✨ Concierge Aureum' : '✨ Google Gemini');
+        agregarMensajeChat('assistant', data.respuesta, data.modo_local ? '✨ Asistente LiveBid' : '✨ Google Gemini');
         if (badge) badge.textContent = data.modo_local ? 'Guía Activa' : 'Gemini en Vivo';
         state.aiHistory.push({ rol: 'user', texto: mensaje }, { rol: 'assistant', texto: data.respuesta });
       } else {
