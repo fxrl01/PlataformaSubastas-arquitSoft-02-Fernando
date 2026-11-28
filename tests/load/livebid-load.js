@@ -113,7 +113,7 @@ function loginUser(email, password) {
   const res = http.post(
     `${BASE_URL}/api/v1/auth/login`,
     JSON.stringify({ email, password }),
-    { headers: { 'Content-Type': 'application/json' } }
+    { headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.19.10.1' } }
   );
   if (res.status !== 200) {
     throw new Error(`Login failed for ${email}: ${res.status} ${res.body}`);

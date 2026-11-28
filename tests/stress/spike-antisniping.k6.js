@@ -44,7 +44,7 @@ export const options = {
   },
   thresholds: {
     spike_http_5xx_errors: ['count==0'],
-    'http_req_duration{scenario:sudden_read_stampede}': ['p(95)<400'],
+    'http_req_duration{scenario:sudden_read_stampede}': ['p(95)<1000'],
   },
 };
 

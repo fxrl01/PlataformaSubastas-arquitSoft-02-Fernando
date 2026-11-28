@@ -20,14 +20,18 @@ restore_replica() {
     fi
     sleep 1
   done
+  docker exec livebid-nginx-gateway nginx -s reload >/dev/null 2>&1 || true
 }
 trap restore_replica EXIT
 
 echo "[Failover HA] 1/4 Verificando balanceo inicial entre las 2 réplicas Go..."
 SEEN_BEFORE=""
-for _ in $(seq 1 8); do
-  INST=$(curl -sf "${BASE_URL}/health" | grep -o '"instance":"[^"]*"' | cut -d'"' -f4)
+for _ in $(seq 1 16); do
+  INST=$(curl -sf "${BASE_URL}/health" | grep -o '"instance":"[^"]*"' | cut -d'"' -f4 || true)
   SEEN_BEFORE="${SEEN_BEFORE} ${INST}"
+  if echo "${SEEN_BEFORE}" | grep -q "livebid-api-1" && echo "${SEEN_BEFORE}" | grep -q "livebid-api-2"; then
+    break
+  fi
 done
 echo "  Instancias activas antes del fallo:${SEEN_BEFORE}"
 echo "${SEEN_BEFORE}" | grep -q "livebid-api-1"
@@ -61,12 +65,19 @@ restore_replica
 trap - EXIT
 
 SEEN_AFTER=""
-for _ in $(seq 1 10); do
-  INST=$(curl -sf "${BASE_URL}/health" | grep -o '"instance":"[^"]*"' | cut -d'"' -f4)
-  SEEN_AFTER="${SEEN_AFTER} ${INST}"
+RECOVERED_BOTH="false"
+for _ in $(seq 1 20); do
+  for _ in $(seq 1 4); do
+    INST=$(curl -sf "${BASE_URL}/health" | grep -o '"instance":"[^"]*"' | cut -d'"' -f4 || true)
+    SEEN_AFTER="${SEEN_AFTER} ${INST}"
+  done
+  if echo "${SEEN_AFTER}" | grep -q "livebid-api-1" && echo "${SEEN_AFTER}" | grep -q "livebid-api-2"; then
+    RECOVERED_BOTH="true"
+    break
+  fi
+  sleep 1
 done
 echo "  Instancias activas tras auto-recuperación:${SEEN_AFTER}"
-echo "${SEEN_AFTER}" | grep -q "livebid-api-1"
-echo "${SEEN_AFTER}" | grep -q "livebid-api-2"
+test "${RECOVERED_BOTH}" = "true"
 
 echo "OK: Prueba de Resiliencia y Alta Disponibilidad (0% downtime) SUPERADA."

@@ -77,7 +77,7 @@ jobs:
       - name: Upload benchmark report artifact
         uses: actions/upload-artifact@v4
         with:
-          name: go-efficiency-benchmarks-${{ github.ref_name }}
+          name: go-efficiency-benchmarks-run-${{ github.run_number }}
           path: tecnologia/livebid-backend/bench-results.txt
 
   jest-unit-100-gate:
