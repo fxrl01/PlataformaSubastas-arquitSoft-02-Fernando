@@ -1,6 +1,6 @@
 # ==============================================================================
-# LIVEBID BACKEND — DOCKERFILE MULTI-STAGE (AWS FREE TIER OPTIMIZED)
-# Tamaño final de imagen: ~18 MB | Consumo RAM: ~20 MB
+# LIVEBID BACKEND — DOCKERFILE MULTI-STAGE (MICROSOFT AZURE & CLOUDFLARE EDGE)
+# Tamaño final de imagen: ~18 MB | Consumo RAM: ~20 MB | Escala: 2,000+ VUs
 # ==============================================================================
 
 # 1. ETAPA DE CONSTRUCCIÓN (BUILDER)

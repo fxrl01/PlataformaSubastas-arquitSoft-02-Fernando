@@ -1,0 +1,90 @@
+name: LiveBid Performance — k6 Load & 2000+ VUs Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Perfil de concurrencia k6 a simular sobre el cluster Docker'
+        required: true
+        default: 'scale2000'
+        type: choice
+        options:
+          - ci
+          - scale2000
+          - stress5000
+      bid_vus:
+        description: 'Número de postores concurrentes enviando ofertas (ej. 15, 25, 50)'
+        required: false
+        default: '25'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  k6-scalability-benchmark:
+    name: k6 Benchmark (${{ inputs.profile || 'scale2000' }}) on Full Cluster
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Tune Linux kernel limits for high WebSocket concurrency
+        run: |
+          sudo sysctl -w fs.file-max=2097152 || true
+          sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535" || true
+          ulimit -n 65535 || true
+
+      - name: Start 6-container cluster (Nginx + 2 Go APIs + PgBouncer + Postgres + Redis)
+        run: |
+          cat << 'EOF' > .env
+          PORT=3000
+          POSTGRES_USER=livebid_admin
+          POSTGRES_PASSWORD=bench_postgres_password
+          JWT_SECRET=bench-super-secret-jwt-key-livebid-2026
+          ADMIN_BOOTSTRAP_EMAIL=admin@livebid.pe
+          ADMIN_BOOTSTRAP_PASSWORD=AdminLiveBid2026!
+          STRIPE_PUBLISHABLE_KEY=pk_test_bench_livebid
+          STRIPE_WEBHOOK_SECRET=whsec_bench_livebid
+          EOF
+          docker compose up --build -d
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:3000/health | grep -q '"status":"UP"'; then
+              echo "Cluster listo para prueba de carga!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Execute k6 load & WebSocket scenario (${{ inputs.profile || 'scale2000' }})
+        run: |
+          mkdir -p tests/load/results
+          PROFILE_NAME="${{ inputs.profile || 'scale2000' }}"
+          BIDDERS="${{ inputs.bid_vus || '25' }}"
+          docker run --rm --network host --ulimit nofile=65535:65535 -u $(id -u):$(id -g) \
+            -e PROFILE="$PROFILE_NAME" \
+            -e BID_VUS="$BIDDERS" \
+            -v "$PWD/tests/load:/scripts" \
+            grafana/k6 run \
+              --summary-export="/scripts/results/k6-${PROFILE_NAME}-summary.json" \
+              /scripts/livebid-load.js | tee "tests/load/results/k6-${PROFILE_NAME}-console.txt"
+
+          {
+            echo "### Resultado del Benchmark k6 — Perfil \`${PROFILE_NAME}\`"
+            echo "- Postores concurrentes configurados (\`BID_VUS\`): **${BIDDERS}**"
+            echo '```text'
+            tail -n 35 "tests/load/results/k6-${PROFILE_NAME}-console.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload k6 JSON & console evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-load-evidence-${{ inputs.profile || 'scale2000' }}
+          path: tests/load/results/
+
+      - name: Teardown cluster
+        if: always()
+        run: docker compose down -v

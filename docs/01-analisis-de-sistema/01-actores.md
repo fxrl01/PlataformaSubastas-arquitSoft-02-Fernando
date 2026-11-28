@@ -43,7 +43,7 @@ flowchart LR
 ```
 
 1. **Subida por el propio usuario (`VENDEDOR`, `MARTILLERO` o `ADMIN`):** En el formulario de la plataforma, el usuario tiene un selector de archivo (`Subir imagen desde mi equipo`) además de poder pegar URLs externas.
-2. **Previsualización y Almacenamiento:** Al elegir una foto de su computadora/celular, el navegador la procesa y previsualiza al instante, enviándola dentro de `imagenes_urls` en `DetallesLote` hacia PostgreSQL (`detalles_lote_json`) o hacia un bucket S3/CDN en producción.
+2. **Previsualización y Almacenamiento:** Al elegir una foto de su computadora/celular, el navegador la procesa y previsualiza al instante, enviándola dentro de `imagenes_urls` en `DetallesLote` hacia PostgreSQL (`detalles_lote_json`) o hacia **Azure Blob Storage / Cloudflare CDN** en producción.
 
 ---
 

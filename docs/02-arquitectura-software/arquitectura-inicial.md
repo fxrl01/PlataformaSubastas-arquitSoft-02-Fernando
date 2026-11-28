@@ -25,7 +25,7 @@ Un error común en los diagramas es mostrar a **Redis** y **PostgreSQL** juntos 
 ### Decisión 3: Pasarela de Pagos Stripe y Servicios Externos como Adaptadores (`Plug & Play`)
 El núcleo de subastas se conecta hacia afuera mediante interfaces limpias (`Ports`) hacia los servicios externos reales del negocio:
 1. **Pasarela de Pagos Stripe (`Stripe Escrow Adapter`):** Maneja la retención preventiva en tarjeta (`PaymentIntent` con `capture_method: manual`), el cobro definitivo al ganador (`capture`) y la liberación inmediata a los postores no ganadores (`cancel`), además de recibir confirmaciones por **Stripe Webhooks**.
-2. **Servicios Externos de Almacenamiento y KYC (`Cloud Storage S3/CDN + Verificación`):** Alojamiento de fotografías del lote, certificados PDF de tasación pericial y validación de identidad/colegiatura del Martillero.
+2. **Servicios Externos de Almacenamiento y KYC (`Azure Blob Storage / Cloudflare CDN + Verificación`):** Alojamiento de fotografías del lote, certificados PDF de tasación pericial y validación de identidad/colegiatura del Martillero.
 3. **Google Gemini API (`AI Risk & Appraisal Adapter`):** Evalúa el riesgo crediticio del postor con un *Circuit Breaker* de seguridad (si la API externa tarda más de `150 ms`, el sistema aplica una regla local automática sin detener la subasta).
 4. **Pasarela Web3 Opcional (`Base L2 / EIP-712`):** Permite a postores cripto firmar pujas con billetera y anclar el certificado de auditoría (`Merkle Root`) sin afectar el flujo tradicional en dólares/moneda local.
 
@@ -80,7 +80,7 @@ flowchart LR
     subgraph CAPA_4["4. PASARELA STRIPE Y SERVICIOS EXTERNOS"]
         direction TB
         Stripe["💳 Stripe API (Pasarela de Pagos)<br><i>PaymentIntents Hold · Capture · Refund · Webhooks</i>"]
-        ExternalDocs["☁️ Servicios Externos (Cloud Storage & KYC)<br><i>S3/CDN Fotos del Lote · PDF Peritaje · Validación DNI/SUNARP</i>"]
+        ExternalDocs["☁️ Servicios Externos (Azure Blob Storage & KYC)<br><i>Azure Blob / Cloudflare CDN Fotos · PDF Peritaje · Validación DNI/SUNARP</i>"]
         GeminiAI["🤖 Google Gemini API (IA + Circuit Breaker)<br><i>Scoring de Riesgo y Copiloto de Tasación</i>"]
         Web3Net["⛓️ Red Web3 Base L2 (Opcional / Híbrido)<br><i>Firmas EIP-712 y Sello Merkle On-Chain</i>"]
     end
@@ -127,7 +127,7 @@ Para evitar complejidades y desarrollar de forma continua, el sistema se constru
   - **Ficha del Encargado (`EncargadoSubasta`):** Nombre del martillero, número de licencia/registro oficial, cargo, experiencia y datos de contacto.
   - **Detalles Técnicos del Lote (`DetallesLote`):** Categoría, ubicación física, precio de reserva, perito inspector, enlace al certificado de tasación (PDF), galería de imágenes y tabla de especificaciones técnicas.
 - **Tabla en PostgreSQL:** `subastas` (con columnas nativas `JSONB` para `encargado_json` y `detalles_lote_json`).
-- **Servicio Externo:** Cloud Storage (S3 / Cloudinary) para alojar imágenes del bien y el PDF del peritaje.
+- **Servicio Externo:** Azure Blob Storage / Cloudflare CDN para alojar imágenes del bien y el PDF del peritaje.
 - **Estado:** ✅ **Backend Implementado** (`PUT /api/v1/subastas/{id}/encargado` y `PUT /api/v1/subastas/{id}/detalles-lote`).
 
 ### Módulo 3: Pasarela de Pagos con Stripe y Custodia de Garantías (`Escrow`)
@@ -173,7 +173,7 @@ Para evitar complejidades y desarrollar de forma continua, el sistema se constru
 │  Paso 1: Definir/ajustar entidad en internal/core/domain                     │
 │  Paso 2: Agregar método en el caso de uso (internal/core/services)           │
 │  Paso 3: Guardar en la ÚNICA Base de Datos (PostgreSQL 16)                   │
-│  Paso 4: Si requiere pago/IA/archivos -> Conectar Adaptador (Stripe/S3/IA)   │
+│  Paso 4: Si requiere pago/IA/archivos -> Conectar Adaptador (Stripe/Azure/IA) │
 │  Paso 5: Exponer endpoint REST/WS y conectar en el Frontend SPA              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```

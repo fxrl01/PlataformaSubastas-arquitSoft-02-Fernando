@@ -19,6 +19,10 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     expect(cssRes.headers()['cache-control']).toContain('max-age=3600');
     expect(cssRes.headers()['x-static-layer']).toBe('nginx-frontend-cache');
 
+    const favRes = await request.get('/favicon.svg');
+    expect(favRes.ok()).toBeTruthy();
+    expect(favRes.headers()['content-type']).toContain('image/svg+xml');
+
     const swaggerRes = await request.get('/swagger');
     expect(swaggerRes.ok()).toBeTruthy();
     expect(swaggerRes.headers()['content-type']).toContain('text/html');
@@ -28,6 +32,23 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     expect(openApiRes.ok()).toBeTruthy();
     const openApiSpec = await openApiRes.json();
     expect(openApiSpec.openapi).toBe('3.0.3');
+
+    const aiAssistantRes = await request.post('/api/v1/ia/asistente', {
+      data: {
+        mensaje: '¿Cómo puedo subir y vender un bien de valor?',
+        subasta_id: 'SUB-2026-001',
+        rol_usuario: 'VISITANTE'
+      }
+    });
+    expect(aiAssistantRes.ok()).toBeTruthy();
+    expect(aiAssistantRes.headers()['x-content-type-options']).toBe('nosniff');
+    const aiBody = await aiAssistantRes.json();
+    expect(aiBody.respuesta).toContain('Vendedor');
+
+    const storefrontRes = await request.get('/api/v1/vendedores/usr_admin_root/vitrina');
+    expect(storefrontRes.ok()).toBeTruthy();
+    const storefrontText = await storefrontRes.text();
+    expect(storefrontText).not.toContain('admin@livebid.pe');
   });
 
   test('Flujo E2E completo con 2 navegadores: Registro -> KYC Admin -> Nueva Subasta -> Stripe Hold -> Puja WS -> Cierre y Merkle', async ({ browser, request }) => {
@@ -41,8 +62,52 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
     const bidderPage = await bidderContext.newPage();
 
     try {
-      // 1. Navegador Postor: Registrarse con rol POSTOR
+      // 1. Navegador Postor: Verificar ausencia de API Docs en cabecera pública, favicon, responsividad multi-pantalla (320px, 768px, 1280px) y secciones
       await bidderPage.goto('/');
+      await expect(bidderPage.locator('header.top-nav #btnOpenSwaggerDocs')).toHaveCount(0);
+      await expect(bidderPage.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.svg/);
+
+      for (const vp of [
+        { width: 320, height: 680 },
+        { width: 390, height: 844 },
+        { width: 768, height: 1024 },
+        { width: 1280, height: 800 }
+      ]) {
+        await bidderPage.setViewportSize(vp);
+        const overflow = await bidderPage.evaluate(() => {
+          return document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        });
+        expect(overflow).toBeLessThanOrEqual(1);
+      }
+
+      await expect(bidderPage.locator('#scheduleGrid article.schedule-card').first()).toBeVisible({ timeout: 10_000 });
+      await expect(bidderPage.locator('#navUserName')).toHaveText('Visitante');
+
+      // Verificar cambio Modo Claro / Modo Oscuro
+      await bidderPage.locator('#btnThemeToggle').click();
+
+      // Verificar sección dedicada de Catálogo
+      await bidderPage.locator('[data-nav-view="catalogo"]').click();
+      await expect(bidderPage.locator('#catalogGrid article.catalog-card').first()).toBeVisible({ timeout: 10_000 });
+
+      // Verificar sección abierta de Social Feed y apertura de Vitrina Pública de Vendedor
+      await bidderPage.locator('[data-nav-view="social"]').click();
+      await expect(bidderPage.locator('#socialFeedList article.social-post-card').first()).toBeVisible({ timeout: 10_000 });
+      await bidderPage.locator('#socialFeedList .btn-seller-link').first().click();
+      await expect(bidderPage.locator('#sellerStorefrontDialog')).toBeVisible();
+      await bidderPage.locator('#sellerStorefrontDialog .btn-close-dialog').click();
+
+      // Verificar Campana Superior de Alertas
+      await bidderPage.locator('#btnNotificationsBell').click();
+      await expect(bidderPage.locator('#notificationsPopover')).toBeVisible();
+      await bidderPage.locator('#btnNotificationsBell').click();
+
+      // Verificar Asistente IA dinámico
+      await bidderPage.locator('#btnOpenAiDrawer').click();
+      await expect(bidderPage.locator('#aiAssistantDrawer')).toBeVisible();
+      await bidderPage.locator('#btnCloseAiDrawer').click();
+      await expect(bidderPage.locator('#aiAssistantDrawer')).toBeHidden({ timeout: 5_000 });
+
       await bidderPage.locator('#btnOpenAuthModal').click();
       await bidderPage.locator('[data-auth-tab="register"]').click();
       await bidderPage.locator('#regName').fill('Postor E2E Playwright');
@@ -105,8 +170,12 @@ test.describe('LiveBid — E2E Real sobre Cluster Nginx + 2 Réplicas Go + PgBou
       await expect(bidderPage.locator('#currentPriceValue')).not.toHaveText('20,000', { timeout: 10_000 });
       expect(Number(minBidVal)).toBeGreaterThan(20000);
 
-      // 5. Verificar sincronización en tiempo real vía WebSocket en el navegador del Admin
+      // 5. Verificar sincronización en tiempo real vía WebSocket (oferta + chat en vivo de sala) en el navegador del Admin
       await expect(adminPage.locator('#totalBidsCount')).toContainText('1 oferta', { timeout: 10_000 });
+
+      await bidderPage.locator('#roomLiveChatInput').fill('¡Excelente lote en sala!');
+      await bidderPage.locator('#btnSendRoomChat').click();
+      await expect(adminPage.locator('#roomLiveChatList')).toContainText('¡Excelente lote en sala!', { timeout: 10_000 });
 
       // 6. Admin inicia conteo de martillo y cierra la subasta
       await adminPage.locator('#btnMartilloConteo').click();

@@ -19,7 +19,7 @@
     {
       "id": "P3",
       "title": "Pasarela Stripe y Servicios Externos Desacoplados",
-      "summary": "Stripe (retención de garantías y cobros), Cloud Storage S3/KYC, Gemini IA y Web3 se conectan mediante adaptadores independientes."
+      "summary": "Stripe (retención de garantías y cobros), Azure Blob Storage / Cloudflare CDN & KYC, Gemini IA y Web3 se conectan mediante adaptadores independientes."
     }
   ],
   "zones": [
@@ -45,7 +45,7 @@
       "id": "Z4_EXTERNOS",
       "label": "4. Pasarela Stripe y Servicios Externos",
       "color": "#c084fc",
-      "description": "Integraciones externas enchufables: Stripe API (Pagos/Hold), Cloud Storage S3 & KYC, Google Gemini IA y Red Web3 opcional."
+      "description": "Integraciones externas enchufables: Stripe API (Pagos/Hold), Azure Blob Storage / Cloudflare CDN & KYC, Google Gemini IA y Red Web3 opcional."
     }
   ],
   "modules_roadmap": [
@@ -67,7 +67,7 @@
       "status": "Backend Listo · UI en Integración",
       "complexity": "Baja",
       "db_tables": ["subastas (encargado_json, detalles_lote_json)"],
-      "external_service": "Cloud Storage (S3 / Cloudinary) para fotos y PDF de peritaje",
+      "external_service": "Azure Blob Storage / Cloudflare CDN para fotos y PDF de peritaje",
       "endpoints": ["POST /api/v1/subastas", "PUT /api/v1/subastas/{id}/encargado", "PUT /api/v1/subastas/{id}/detalles-lote"],
       "description": "Publicación de subastas, asignación del Martillero/Encargado oficial (licencia, cargo, experiencia) y subida de la ficha técnica y pericial del lote."
     },

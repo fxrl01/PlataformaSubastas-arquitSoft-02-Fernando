@@ -1,0 +1,107 @@
+name: LiveBid Unit & Efficiency — Multi-Branch Matrix & Benchmarks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: unit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go-unit-matrix:
+    name: Go Unit + Race (${{ matrix.layer_name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - layer_name: 'Core Domain & Application Services'
+            packages: './internal/core/...'
+          - layer_name: 'HTTP, Security, Realtime, AI, Payments & Web3 Adapters'
+            packages: './internal/adapters/handlers/... ./internal/adapters/security/... ./internal/adapters/realtime/... ./internal/adapters/ai/... ./internal/adapters/payments/... ./internal/adapters/web3/... ./internal/adapters/persistence/...'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go from go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tecnologia/livebid-backend/go.mod
+          cache-dependency-path: tecnologia/livebid-backend/go.sum
+
+      - name: Run isolated unit tests with race detector
+        working-directory: tecnologia/livebid-backend
+        run: |
+          go test -count=1 -race -cover ${{ matrix.packages }} | tee unit-layer.txt
+          {
+            echo "### ${{ matrix.layer_name }} (\`go test -race -cover\`)"
+            echo "- Rama validada: \`${{ github.ref_name }}\`"
+            echo '```text'
+            cat unit-layer.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  go-efficiency-benchmarks:
+    name: Go CPU & Memory Microbenchmarks (-benchmem)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go from go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tecnologia/livebid-backend/go.mod
+          cache-dependency-path: tecnologia/livebid-backend/go.sum
+
+      - name: Execute nanosecond & allocation benchmarks
+        working-directory: tecnologia/livebid-backend
+        run: |
+          go test -run=^$ -bench=. -benchmem -benchtime=250ms ./internal/core/domain/... ./internal/adapters/security/... ./internal/adapters/realtime/... | tee bench-results.txt
+          {
+            echo "### Benchmarks de Eficiencia CPU y Memoria (\`-benchmem\`)"
+            echo "- Mide nanosegundos por operación (\`ns/op\`), bytes en heap (\`B/op\`) y asignaciones (\`allocs/op\`)."
+            echo '```text'
+            cat bench-results.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-efficiency-benchmarks-run-${{ github.run_number }}
+          path: tecnologia/livebid-backend/bench-results.txt
+
+  jest-unit-100-gate:
+    name: Jest Unit & Edge-Case Suite (100% Coverage Gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tecnologia/boilerplate-clean-arquitecture/package-lock.json
+
+      - name: Run Jest unit & high-frequency edge-case specs
+        working-directory: tecnologia/boilerplate-clean-arquitecture
+        run: |
+          npm ci
+          npm run test:coverage
+          {
+            echo "### Jest Unit & Edge-Case Suite (TypeScript Clean Architecture)"
+            echo "- Rama validada: \`${{ github.ref_name }}\`"
+            echo "- Cobertura verificada: **100% Statements, Branches, Functions & Lines**."
+          } >> "$GITHUB_STEP_SUMMARY"

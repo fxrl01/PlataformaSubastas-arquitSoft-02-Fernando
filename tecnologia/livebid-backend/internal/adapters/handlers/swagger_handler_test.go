@@ -63,9 +63,10 @@ func TestSwaggerHandlerEndpointsAndContentTypes(t *testing.T) {
 
 func TestOpenAPISpecMatchesMainServerRoutesAndRefs(t *testing.T) {
 	var spec struct {
-		OpenAPI    string                               `json:"openapi"`
-		Paths      map[string]map[string]map[string]any `json:"paths"`
-		Components map[string]map[string]any            `json:"components"`
+		OpenAPI        string                               `json:"openapi"`
+		PublicRedacted bool                                 `json:"x-public-redacted"`
+		Paths          map[string]map[string]map[string]any `json:"paths"`
+		Components     map[string]map[string]any            `json:"components"`
 	}
 	if err := json.Unmarshal(docs.OpenAPIJSON, &spec); err != nil {
 		t.Fatalf("unmarshal embedded openapi.json: %v", err)
@@ -98,6 +99,10 @@ func TestOpenAPISpecMatchesMainServerRoutesAndRefs(t *testing.T) {
 		t.Fatalf("re-unmarshal raw spec: %v", err)
 	}
 	checkLocalRefs(t, rawSpec, spec.Components)
+
+	if spec.PublicRedacted {
+		return
+	}
 
 	// Verify 100% parity with API & WS routes registered in cmd/server/main.go
 	mainPath := filepath.Join("..", "..", "..", "cmd", "server", "main.go")

@@ -1,10 +1,15 @@
-name: LiveBid CI — Build, Tests, E2E & k6 Load
+name: LiveBid CI — Build, Tests, E2E & k6 Baseline
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-publica]
   pull_request:
-    branches: [main]
+    branches: [main, release-publica]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -43,10 +48,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Go 1.23
+      - name: Setup Go from go.mod
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: tecnologia/livebid-backend/go.mod
           cache-dependency-path: tecnologia/livebid-backend/go.sum
 
       - name: Initialize PostgreSQL schema
@@ -69,7 +74,12 @@ jobs:
           TEST_REDIS_URL: redis://localhost:6379
         run: |
           go test -v -race -coverprofile=coverage.out ./...
-          go tool cover -func=coverage.out | tail -n 15
+          {
+            echo "### Cobertura Backend Go (Clean Architecture + `-race`)"
+            echo '```text'
+            go tool cover -func=coverage.out | tail -n 15
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Go coverage report
         uses: actions/upload-artifact@v4
@@ -77,10 +87,44 @@ jobs:
           name: go-coverage-report
           path: tecnologia/livebid-backend/coverage.out
 
-  e2e-and-load-cluster:
-    name: Docker Cluster + Playwright E2E + k6 Load Test
+  jest-clean-architecture-coverage:
+    name: Jest 100% Coverage & Clean Architecture Specs (TypeScript)
     runs-on: ubuntu-latest
-    needs: go-unit-and-integration
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tecnologia/boilerplate-clean-arquitecture/package-lock.json
+
+      - name: Install dependencies & run Jest with 100% global coverage threshold
+        working-directory: tecnologia/boilerplate-clean-arquitecture
+        run: |
+          npm ci
+          npm run test:coverage
+          npm run test:bids
+          npm run test:escrow
+          npm run test:server
+          {
+            echo "### Cobertura Jest Clean Architecture (TypeScript)"
+            echo "- Umbral exigido y cumplido: **100% Statements, Branches, Functions y Lines**."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Jest HTML & LCOV coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage-report
+          path: tecnologia/boilerplate-clean-arquitecture/coverage/
+
+  e2e-and-load-cluster:
+    name: Docker Cluster + Playwright E2E + k6 Baseline
+    runs-on: ubuntu-latest
+    needs: [go-unit-and-integration, jest-clean-architecture-coverage]
 
     steps:
       - name: Checkout repository
@@ -103,7 +147,7 @@ jobs:
       - name: Start full scalable cluster (Nginx + 2 Go replicas + PgBouncer + Postgres + Redis)
         run: |
           docker compose up --build -d
-          for i in $(seq 1 30); do
+          for i in $(seq 1 45); do
             if curl -sf http://localhost:3000/health | grep -q '"status":"UP"'; then
               echo "Cluster healthy!"
               break
@@ -119,28 +163,41 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/e2e/package-lock.json
 
-      - name: Run Playwright E2E suite (2 browsers + WebSocket + Stripe + Merkle)
+      - name: Run Playwright E2E, UI/WCAG & OWASP DAST suites
         working-directory: tests/e2e
         run: |
           npm ci
           npx playwright install chromium --with-deps
-          npx playwright test
+          npm run test:all
 
-      - name: Run k6 load & WebSocket benchmark
+      - name: Run k6 baseline load, Anti-Sniping Spike & Nginx HA Failover tests
         run: |
-          mkdir -p tests/load/results
+          mkdir -p tests/load/results tests/stress/results
           docker run --rm --network host -u $(id -u):$(id -g) \
+            -e PROFILE=ci \
             -v "$PWD/tests/load:/scripts" \
-            grafana/k6 run /scripts/livebid-load.js
+            grafana/k6 run --summary-export=/scripts/results/k6-ci-summary.json /scripts/livebid-load.js
+          docker run --rm --network host -u $(id -u):$(id -g) \
+            -v "$PWD/tests/stress:/scripts" \
+            grafana/k6 run --summary-export=/scripts/results/spike-summary.json /scripts/spike-antisniping.k6.js
+          bash tests/resilience/failover-ha.sh
+          {
+            echo "### Validación 360° en Clúster Real (E2E + UI/WCAG + OWASP DAST + Load + Spike + Failover HA)"
+            echo "- Clúster activo: Nginx Gateway + 2 Réplicas Go + PgBouncer + PostgreSQL 16 + Redis 7"
+            echo "- Playwright E2E, UI/Accesibilidad (320px-1280px) y Pentesting OWASP DAST: **PASSED**"
+            echo "- k6 Baseline (155 VUs) + Spike Anti-Sniping Stampede (150 VUs): **PASSED**"
+            echo "- Resiliencia / Alta Disponibilidad (caída abrupta de `livebid-api-2` con `0%` downtime): **PASSED**"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Playwright & k6 reports
+      - name: Upload Playwright, k6 Load & Spike reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-and-k6-reports
+          name: e2e-ui-security-k6-reports
           path: |
             tests/e2e/playwright-report/
             tests/load/results/
+            tests/stress/results/
 
       - name: Teardown Docker cluster
         if: always()

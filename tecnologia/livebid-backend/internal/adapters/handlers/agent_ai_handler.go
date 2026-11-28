@@ -15,6 +15,8 @@ type AgentAIHandler struct {
 	router     *ai.MultiModelRouter
 	breaker    *ai.CircuitBreakerIA
 	detector   *ai.AsyncFraudDetector
+	assistant  *ai.GeminiAssistant
+	auctions   domain.SubastaRepository
 }
 
 func NewAgentAIHandler(
@@ -29,6 +31,12 @@ func NewAgentAIHandler(
 		breaker:    breaker,
 		detector:   detector,
 	}
+}
+
+func (h *AgentAIHandler) WithAssistant(assistant *ai.GeminiAssistant, auctions domain.SubastaRepository) *AgentAIHandler {
+	h.assistant = assistant
+	h.auctions = auctions
+	return h
 }
 
 type createMandateRequest struct {
@@ -159,5 +167,58 @@ func (h *AgentAIHandler) SwitchModel(w http.ResponseWriter, r *http.Request) {
 		"modelo_ia_activo": h.router.ActiveModel(),
 		"status":           "switched",
 	})
+}
+
+type assistantChatRequest struct {
+	Message      string             `json:"mensaje"`
+	AuctionID    string             `json:"subasta_id,omitempty"`
+	UserRole     string             `json:"rol_usuario,omitempty"`
+	UserName     string             `json:"nombre_usuario,omitempty"`
+	HasGuarantee bool               `json:"tiene_garantia,omitempty"`
+	History      []ai.AssistantTurn `json:"historial,omitempty"`
+}
+
+func (h *AgentAIHandler) AssistantChat(w http.ResponseWriter, r *http.Request) {
+	var req assistantChatRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	assistant := h.assistant
+	if assistant == nil {
+		assistant = ai.NewGeminiAssistant("")
+	}
+
+	var aucCtx ai.AssistantAuctionContext
+	if h.auctions != nil {
+		if list, err := h.auctions.Listar(r.Context()); err == nil {
+			aucCtx.TotalCatalog = len(list)
+		}
+		if req.AuctionID != "" {
+			if sub, err := h.auctions.ObtenerPorID(r.Context(), req.AuctionID); err == nil && sub != nil {
+				aucCtx.ID = sub.ID
+				aucCtx.Title = sub.Titulo
+				aucCtx.Category = sub.DetallesLote.Categoria
+				aucCtx.Status = string(sub.Estado)
+				aucCtx.BasePrice = sub.PrecioBase
+				aucCtx.CurrentPrice = sub.PrecioActual
+				aucCtx.NextMinimumBid = sub.PrecioActual + sub.CalcularIncrementoMinimo()
+				aucCtx.RequiredDeposit = domain.RequiredGuarantee(sub.PrecioBase)
+			}
+		}
+	}
+
+	reply, err := assistant.Answer(r.Context(), ai.AssistantQuery{
+		Message:        req.Message,
+		UserRole:       req.UserRole,
+		UserName:       req.UserName,
+		HasGuarantee:   req.HasGuarantee,
+		AuctionContext: aucCtx,
+		History:        req.History,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mensaje requerido para el asistente"})
+		return
+	}
+	writeJSON(w, http.StatusOK, reply)
 }
 

@@ -507,7 +507,7 @@
       </div>
       <div class="decision-card stripe-ext">
         <h3>💳 Pasarela de Pagos Stripe + Servicios Externos</h3>
-        <p>Integración explícita con <strong>Stripe API</strong> (retención preventiva de garantía <em>Pre-Auth Hold</em>, cobro al ganador y liberación automática), <strong>Cloud Storage S3/KYC</strong> (fotos del lote y PDF pericial) y <strong>Google Gemini IA</strong>.</p>
+        <p>Integración explícita con <strong>Stripe API</strong> (retención preventiva de garantía <em>Pre-Auth Hold</em>, cobro al ganador y liberación automática), <strong>Azure Blob Storage / Cloudflare CDN &amp; KYC</strong> (fotos del lote y PDF pericial) y <strong>Google Gemini IA</strong>.</p>
       </div>
       <div class="decision-card">
         <h3>🚀 Monolito Modular para Desarrollo Continuo</h3>
@@ -774,7 +774,7 @@
       },
       {
         id: "n_storage_kyc", x: 902, y: 225, w: 228, h: 120, color: "#a855f7", zone: "4. Pasarela de Pagos y Externos",
-        title: "☁️ Cloud Storage (S3) & KYC",
+        title: "☁️ Azure Blob Storage & KYC",
         subtitle: "Fotos del Lote, PDF Peritaje e Identidad",
         desc: "Servicios externos para almacenar archivos pesados (galería de fotos del vehículo/inmueble y certificado PDF del perito) y validar documentos DNI/RUC/SUNARP.",
         bullets: [
@@ -857,7 +857,7 @@
         statusClass: "",
         desc: "Creación de subastas, carga de credenciales del Martillero/Encargado (licencia, cargo, contacto) y subida de la ficha técnica y tasación pericial del lote.",
         db: "PostgreSQL: subastas (JSONB)",
-        ext: "Cloud Storage (S3/CDN Fotos y PDF)",
+        ext: "Azure Blob Storage / Cloudflare CDN (Fotos y PDF)",
         nodes: ["n_vendedor", "n_martillero", "n_gateway", "n_mod_auth_cat", "n_postgres", "n_storage_kyc"],
         edges: ["e2", "e3", "e5", "e10", "e14"]
       },

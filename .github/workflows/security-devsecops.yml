@@ -1,0 +1,134 @@
+name: LiveBid DevSecOps — Security, SAST & Container Audit
+
+on:
+  push:
+    branches: [main, release-publica]
+  pull_request:
+    branches: [main, release-publica]
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: sec-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  owasp-and-dependency-audit:
+    name: OWASP Zero-Trust Policy, Secrets Guard & Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify no leaked .env files, private keys, or live tokens
+        run: |
+          if git ls-files | grep -Eq '(^|/)\.env$'; then
+            echo "ERROR: Archivo .env rastreado en Git"
+            exit 1
+          fi
+          if grep -rnE '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{30,}|sk_live_[A-Za-z0-9]{20,})' \
+            tecnologia/ docker/ docs/ specs/ README.md docker-compose.yml 2>/dev/null; then
+            echo "ERROR: Posible credencial privada detectada en el codigo fuente"
+            exit 1
+          fi
+          echo "OK: Cero archivos .env ni llaves privadas filtradas."
+
+      - name: Verify Zero-Trust network binding in docker-compose.yml
+        run: |
+          grep -q '"127.0.0.1:5432:5432"' docker-compose.yml
+          grep -q '"127.0.0.1:6379:6379"' docker-compose.yml
+          grep -q 'USER livebiduser' Dockerfile
+          echo "OK: PostgreSQL y Redis aislados en loopback 127.0.0.1 y contenedor Go sin root."
+
+      - name: Setup Go & run static security checks + govulncheck
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tecnologia/livebid-backend/go.mod
+          cache-dependency-path: tecnologia/livebid-backend/go.sum
+
+      - name: Run Go security middleware tests & govulncheck report
+        working-directory: tecnologia/livebid-backend
+        run: |
+          mkdir -p ../../security-reports
+          go vet ./...
+          go test -v -race ./internal/adapters/security/...
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./... > ../../security-reports/govulncheck.txt 2>&1 || true
+          cat ../../security-reports/govulncheck.txt
+
+      - name: Setup Node.js & audit TypeScript Clean Architecture packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tecnologia/boilerplate-clean-arquitecture/package-lock.json
+
+      - name: Run npm security audit
+        working-directory: tecnologia/boilerplate-clean-arquitecture
+        run: |
+          npm audit --audit-level=critical | tee ../../security-reports/npm-audit.txt
+
+      - name: Generate DevSecOps summary
+        run: |
+          {
+            echo "### Reporte DevSecOps y Controles OWASP"
+            echo "- **Secretos y `.env`:** Cero fugas detectadas en el árbol Git."
+            echo "- **Aislamiento de Red:** PostgreSQL (`127.0.0.1:5432`) y Redis (`127.0.0.1:6379`) protegidos."
+            echo "- **Contenedor sin privilegios:** Ejecución bajo `USER livebiduser` verificada."
+            echo "- **Middleware de Seguridad Go (`-race`):** Rate Limiting IP (`429`), Cabeceras CSP/XFO y límite `MaxBytesReader` validados."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dependency security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: devsecops-audit-reports
+          path: security-reports/
+
+  container-trivy-scan:
+    name: Docker Image Vulnerability Scan (Trivy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build production Docker image for inspection
+        run: |
+          docker build -t livebid-api:trivy-scan -f ./Dockerfile .
+          docker save livebid-api:trivy-scan -o livebid-api.tar
+
+      - name: Verify container runs as non-root UID 1000
+        run: |
+          WHOAMI=$(docker run --rm --entrypoint id livebid-api:trivy-scan -u)
+          echo "Container UID: $WHOAMI"
+          test "$WHOAMI" = "1000"
+
+      - name: Run Aqua Trivy vulnerability scanner via official GHCR image
+        run: |
+          docker run --rm \
+            -v "$PWD:/scan:ro" \
+            ghcr.io/aquasecurity/trivy:latest image \
+            --input /scan/livebid-api.tar \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --exit-code 0 > trivy-image-report.txt
+
+      - name: Publish Trivy report to summary & artifacts
+        run: |
+          {
+            echo "### Escaneo de Imagen Docker (Aqua Trivy)"
+            echo "- Usuario de ejecución verificado: \`UID 1000 (livebiduser)\`"
+            echo '```text'
+            head -n 45 trivy-image-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Trivy scan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-container-report
+          path: trivy-image-report.txt

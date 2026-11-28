@@ -31,10 +31,14 @@ skills-lock.json
 GUIA-*.md
 Plan_implement.md
 
-# Reportes Playwright E2E
+# Reportes Playwright E2E, UI y Seguridad
 tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/blob-report/
+tests/ui/test-results/
+tests/security/test-results/
 
-# Reportes de cobertura Jest
+# Reportes pesados de cobertura y estrés (se preserva COVERAGE_SUMMARY.md)
 tecnologia/boilerplate-clean-arquitecture/coverage/
+tests/coverage/reports/
+tests/stress/results/
